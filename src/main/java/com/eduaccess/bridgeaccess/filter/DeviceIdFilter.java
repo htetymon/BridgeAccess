@@ -15,6 +15,7 @@ import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.eduaccess.bridgeaccess.error.ApiErrorResponse;
+import com.eduaccess.bridgeaccess.error.ErrorCode;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,7 +30,6 @@ public class DeviceIdFilter extends OncePerRequestFilter {
 	public static final String HEADER = "X-Device-Id";
 	public static final String REQUEST_ATTRIBUTE = "deviceId";
 
-	private static final String REQUEST_ID_HEADER = "X-Request-Id";
 	private static final String API_PREFIX = "/api/v1";
 	private static final String HEALTH_PATH = "/api/v1/health";
 
@@ -87,29 +87,14 @@ public class DeviceIdFilter extends OncePerRequestFilter {
 	}
 
 	private void writeInvalidDeviceId(HttpServletRequest request, HttpServletResponse response) throws IOException {
-		String requestId = resolveRequestId(request);
-		ApiErrorResponse body = new ApiErrorResponse(new ApiErrorResponse.Error("INVALID_DEVICE_ID",
-				"A valid X-Device-Id header is required.", null, requestId));
+		String requestId = RequestIdFilter.resolve(request);
+		ApiErrorResponse body = ApiErrorResponse.of(ErrorCode.INVALID_DEVICE_ID, requestId);
 
-		response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+		response.setStatus(ErrorCode.INVALID_DEVICE_ID.status().value());
 		response.setContentType("application/json");
 		response.setCharacterEncoding("UTF-8");
-		response.setHeader(REQUEST_ID_HEADER, requestId);
+		response.setHeader(RequestIdFilter.HEADER, requestId);
 		objectMapper.writeValue(response.getOutputStream(), body);
-	}
-
-	private String resolveRequestId(HttpServletRequest request) {
-		String header = request.getHeader(REQUEST_ID_HEADER);
-		if (header != null) {
-			String candidate = header.trim();
-			try {
-				return UUID.fromString(candidate).toString();
-			}
-			catch (IllegalArgumentException ignored) {
-				// Fall through to a generated ID for malformed client values.
-			}
-		}
-		return UUID.randomUUID().toString();
 	}
 
 }
