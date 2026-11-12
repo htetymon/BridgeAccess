@@ -407,3 +407,149 @@ button {
     animation-duration: 0s;
   }
 }
+
+/* -------------------------------------------------------------- onboarding */
+
+.onboarding {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: 12px var(--gutter) calc(24px + var(--safe-bottom));
+  touch-action: pan-y;
+}
+
+.onboarding__top {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 44px;
+}
+
+.onboarding__skip {
+  min-height: 44px;
+  padding: 0 12px;
+  margin-right: -12px;
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.onboarding__slide {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  text-align: center;
+  animation: onboarding-in 0.25s ease-out;
+}
+
+@keyframes onboarding-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.onboarding__art {
+  margin-bottom: 16px;
+}
+
+.onboarding__art svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.onboarding__title {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.onboarding__text {
+  max-width: 34ch;
+  color: var(--color-muted);
+}
+
+.onboarding__ways {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.onboarding__way {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+}
+
+.onboarding__way svg {
+  flex-shrink: 0;
+}
+
+.onboarding__way div {
+  display: grid;
+}
+
+.onboarding__way span {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.onboarding__way--learn {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.onboarding__way--contribute {
+  background: var(--color-contribute-soft);
+  color: var(--color-contribute);
+}
+
+.onboarding__way strong {
+  color: var(--color-ink);
+}
+
+.onboarding__footer {
+  display: grid;
+  gap: 24px;
+  padding-top: 24px;
+}
+
+.onboarding__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.onboarding__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-border);
+  transition: width 0.2s, background-color 0.2s;
+}
+
+.onboarding__dot--active {
+  width: 24px;
+  background: var(--color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding__slide {
+    animation: none;
+  }
+
+  .onboarding__dot {
+    transition: none;
+  }
+}
