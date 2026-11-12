@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration, useNavigation } from 'react-router'
+import UpdatePrompt from '../components/UpdatePrompt'
 
 /**
  * App frame for every screen. While a lazy route chunk downloads, React Router keeps the
@@ -13,6 +14,7 @@ export default function RootLayout() {
     <div className="app">
       {loading && <div className="route-progress" role="progressbar" aria-label="Loading page" />}
       <Outlet />
+      <UpdatePrompt />
       <ScrollRestoration />
     </div>
   )
