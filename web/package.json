@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "dexie": "^4.4.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^7.18.5"
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19.3.0",
     "@vite-pwa/assets-generator": "^2.0.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.2.8",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
