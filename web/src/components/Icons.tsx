@@ -57,3 +57,23 @@ export const ChevronRightIcon = (p: IconProps) => (
     <path d="m9 18 6-6-6-6" />
   </Svg>
 )
+
+export const FileTextIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
+    <path d="M14 3v5h5M9 13h6M9 17h6" />
+  </Svg>
+)
+
+export const PlayIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <rect x="3" y="5" width="18" height="14" rx="3" />
+    <path d="m10 9 5 3-5 3z" fill="currentColor" />
+  </Svg>
+)
+
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Svg>
+)

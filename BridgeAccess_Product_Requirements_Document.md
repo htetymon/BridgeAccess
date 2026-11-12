@@ -125,8 +125,8 @@ Priority: **P0** must ship, **P1** should ship, **P2** nice to have.
 | FR-5.7  | After submitting, the package shows as Processing and becomes available when ready. If it fails, show the reason and a Retry button.                                            | P0       |
 | FR-5.8  | A contributor can delete their own package.                                                                                                                                     | P0       |
 | FR-5.9  | Creating needs a connection. Offline, keep a draft and explain why Create is disabled.                                                                                          | P1       |
-| FR-5.10 | Limit creations to 5 per device per day (configurable).                                                                                                                         | P0       |
-| FR-5.11 | Info tooltip explaining what visuals are for.                                                                                                                                   | P2       |
+
+| FR-5.10 | Info tooltip explaining what visuals are for.                                                                                                                                   | P2       |
 
 ### 6.6 AI generation (Gemini, server side)
 
