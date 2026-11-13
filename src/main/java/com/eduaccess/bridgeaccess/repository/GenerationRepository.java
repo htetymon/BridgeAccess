@@ -22,7 +22,8 @@ import org.springframework.stereotype.Repository;
 public class GenerationRepository {
 
 	/** What the job builds a lesson from. {@code sourceContent} is null when nothing was pasted. */
-	public record PackageSource(UUID id, String resourceType, String resourceLink, String sourceContent) {
+	public record PackageSource(UUID id, String resourceType, String originalTitle, String author,
+			String resourceLink, String sourceContent) {
 	}
 
 	private final NamedParameterJdbcTemplate jdbc;
@@ -33,12 +34,13 @@ public class GenerationRepository {
 
 	public Optional<PackageSource> findSource(UUID packageId) {
 		String sql = """
-				select id, resource_type::text as resource_type, resource_link, source_content
+				select id, resource_type::text as resource_type, original_title, author, resource_link, source_content
 				  from app.learning_packages
 				 where id = :id""";
 		List<PackageSource> rows = this.jdbc.query(sql, new MapSqlParameterSource("id", packageId),
 				(rs, i) -> new PackageSource(rs.getObject("id", UUID.class), rs.getString("resource_type"),
-						rs.getString("resource_link"), rs.getString("source_content")));
+						rs.getString("original_title"), rs.getString("author"), rs.getString("resource_link"),
+						rs.getString("source_content")));
 		return rows.stream().findFirst();
 	}
 
