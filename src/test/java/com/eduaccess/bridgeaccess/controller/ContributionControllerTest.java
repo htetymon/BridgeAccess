@@ -49,6 +49,7 @@ import com.eduaccess.bridgeaccess.repository.ContributionRepository.NewImageRow;
 import com.eduaccess.bridgeaccess.repository.ContributionRepository.NewPackageRow;
 import com.eduaccess.bridgeaccess.service.ContributionService;
 import com.eduaccess.bridgeaccess.service.CreatePackageValidator;
+import com.eduaccess.bridgeaccess.service.generation.GenerationDispatcher;
 import com.eduaccess.bridgeaccess.storage.ImageStore;
 
 import tools.jackson.databind.ObjectMapper;
@@ -101,6 +102,9 @@ class ContributionControllerTest {
 	@MockitoBean
 	ImageStore imageStore;
 
+	@MockitoBean
+	GenerationDispatcher generationDispatcher;
+
 	@BeforeEach
 	void defaults() {
 		given(this.repository.findLiveByLink(anyString())).willReturn(Optional.empty());
@@ -138,6 +142,24 @@ class ContributionControllerTest {
 		order.verify(this.repository).lockDevice(DEVICE);
 		order.verify(this.repository).countCreatedSince(DEVICE, DAY_START);
 		order.verify(this.repository).insertPackage(any());
+	}
+
+	@Test
+	void queuesGenerationAfterCommit() throws Exception {
+		post(validText()).andExpect(status().isAccepted());
+
+		UUID id = insertedRow().id();
+		InOrder order = inOrder(this.repository, this.generationDispatcher);
+		order.verify(this.repository).insertPackage(any());
+		order.verify(this.generationDispatcher).submit(id);
+	}
+
+	@Test
+	void returns202EvenWhenGenerationQueueIsFull() throws Exception {
+		given(this.generationDispatcher.submit(any())).willReturn(false);
+
+		post(validText()).andExpect(status().isAccepted()).andExpect(jsonPath("$.status").value("processing"));
+		verify(this.imageStore, never()).delete(anyString());
 	}
 
 	@Test
@@ -327,6 +349,7 @@ class ContributionControllerTest {
 
 		post(validText(), image("a.png", "image/png", PNG)).andExpect(status().isInternalServerError());
 		verify(this.imageStore).delete(anyString());
+		verify(this.generationDispatcher, never()).submit(any());
 	}
 
 	@Test

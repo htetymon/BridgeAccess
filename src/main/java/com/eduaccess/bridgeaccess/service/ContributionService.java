@@ -23,6 +23,7 @@ import com.eduaccess.bridgeaccess.repository.ContributionRepository.NewImageRow;
 import com.eduaccess.bridgeaccess.repository.ContributionRepository.NewPackageRow;
 import com.eduaccess.bridgeaccess.service.CreatePackageValidator.NewImage;
 import com.eduaccess.bridgeaccess.service.CreatePackageValidator.NewPackage;
+import com.eduaccess.bridgeaccess.service.generation.GenerationDispatcher;
 import com.eduaccess.bridgeaccess.storage.ImageStore;
 
 /**
@@ -40,7 +41,8 @@ import com.eduaccess.bridgeaccess.storage.ImageStore;
  * closes the race on the link. If the transaction fails, stored images are deleted.</li>
  * </ol>
  * Images are stored before the transaction so that no database connection is held during
- * uploads.
+ * uploads. After the commit the package is handed to the bounded generation pool and the
+ * request returns without waiting for it.
  */
 @Service
 public class ContributionService {
@@ -62,14 +64,18 @@ public class ContributionService {
 
 	private final Clock clock;
 
+	private final GenerationDispatcher generationDispatcher;
+
 	public ContributionService(CreatePackageValidator validator, ContributionRepository repository,
-			ImageStore imageStore, TransactionOperations transactions, ContributionProperties properties, Clock clock) {
+			ImageStore imageStore, TransactionOperations transactions, ContributionProperties properties, Clock clock,
+			GenerationDispatcher generationDispatcher) {
 		this.validator = validator;
 		this.repository = repository;
 		this.imageStore = imageStore;
 		this.transactions = transactions;
 		this.properties = properties;
 		this.clock = clock;
+		this.generationDispatcher = generationDispatcher;
 	}
 
 	public CreatedPackage create(UUID deviceId, String rawData, List<MultipartFile> files) {
@@ -79,6 +85,14 @@ public class ContributionService {
 		rejectOverLimit(this.repository.countCreatedSince(deviceId, dayStart));
 
 		UUID id = UUID.randomUUID();
+		Instant createdAt = insert(id, deviceId, pkg, dayStart);
+		// Committed: hand it to the AI job. Never throws; a full queue leaves the package
+		// waiting for the sweeper, and the client gets its 202 either way.
+		this.generationDispatcher.submit(id);
+		return new CreatedPackage(id, createdAt);
+	}
+
+	private Instant insert(UUID id, UUID deviceId, NewPackage pkg, Instant dayStart) {
 		List<String> stored = new ArrayList<>();
 		try {
 			List<NewImageRow> imageRows = new ArrayList<>();
@@ -90,7 +104,7 @@ public class ContributionService {
 						image.bytes().length, image.altText()));
 			}
 
-			Instant createdAt = this.transactions.execute(status -> {
+			return this.transactions.execute(status -> {
 				this.repository.lockDevice(deviceId);
 				rejectOverLimit(this.repository.countCreatedSince(deviceId, dayStart));
 				Instant created = this.repository.insertPackage(new NewPackageRow(id, deviceId, pkg.resourceType(),
@@ -98,7 +112,6 @@ public class ContributionService {
 				imageRows.forEach(this.repository::insertImage);
 				return created;
 			});
-			return new CreatedPackage(id, createdAt);
 		}
 		catch (DuplicateKeyException ex) {
 			// Another request created a package with this link after our first check.
