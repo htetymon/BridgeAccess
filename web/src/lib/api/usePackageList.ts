@@ -14,66 +14,97 @@ export type PackageListState = {
   hasMore: boolean
 }
 
-type Internal = PackageListState & { cursor: string | null }
-
-const LOADING: Internal = { items: [], status: 'loading', error: null, hasMore: false, cursor: null }
+type Internal = PackageListState & {
+  cursor: string | null
+  /** The filters these items belong to. A different key means a new list is loading. */
+  key: string
+}
 
 /**
- * Cursor-paged GET /packages. The first page loads on mount; `loadMore` appends the next
- * one; `retry` reloads from the first page. In-flight requests are cancelled on unmount.
+ * Cursor-paged GET /packages. The first page loads on mount and again whenever the filters
+ * change; `loadMore` appends the next page; `retry` reloads from the first page.
+ *
+ * Results are tagged with the filters they were loaded for, so after a filter change the
+ * old list is never shown as the new one, Load more never uses the old cursor, and a slow
+ * response for an earlier search cannot overwrite a newer one (it is aborted, and ignored if
+ * it still arrives).
  */
 export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'cursor'> = {}, pageSize = PAGE_SIZE) {
-  const [state, setState] = useState<Internal>(LOADING)
+  const filterKey = JSON.stringify({ ...filters, pageSize })
+  const [state, setState] = useState<Internal>({ ...EMPTY, status: 'loading', key: '' })
   const [reloadKey, setReloadKey] = useState(0)
   const moreRequest = useRef<AbortController | null>(null)
-  const filterKey = JSON.stringify(filters)
 
   useEffect(() => {
     const controller = new AbortController()
-    listPackages({ ...(JSON.parse(filterKey) as ListPackagesParams), limit: pageSize }, controller.signal).then(
+    const { pageSize: size, ...params } = JSON.parse(filterKey) as ListPackagesParams & { pageSize: number }
+    listPackages({ ...params, limit: size }, controller.signal).then(
       (page) =>
-        setState({ items: page.items, cursor: page.nextCursor, hasMore: page.nextCursor !== null, status: 'ready', error: null }),
+        setState({
+          items: page.items,
+          cursor: page.nextCursor,
+          hasMore: page.nextCursor !== null,
+          status: 'ready',
+          error: null,
+          key: filterKey,
+        }),
       (e: unknown) => {
-        if (!controller.signal.aborted) setState({ ...LOADING, status: 'error', error: toApiError(e) })
+        if (!controller.signal.aborted) setState({ ...EMPTY, status: 'error', error: toApiError(e), key: filterKey })
       },
     )
     return () => {
       controller.abort()
       moreRequest.current?.abort()
     }
-  }, [filterKey, reloadKey, pageSize])
+  }, [filterKey, reloadKey])
+
+  const current = state.key === filterKey
 
   const loadMore = useCallback(() => {
-    if (state.status !== 'ready' || !state.cursor) return
+    if (!current || state.status !== 'ready' || !state.cursor) return
     const controller = new AbortController()
     moreRequest.current = controller
+    const { pageSize: size, ...params } = JSON.parse(filterKey) as ListPackagesParams & { pageSize: number }
     setState((s) => ({ ...s, status: 'loadingMore', error: null }))
-    listPackages(
-      { ...(JSON.parse(filterKey) as ListPackagesParams), limit: pageSize, cursor: state.cursor },
-      controller.signal,
-    ).then(
+    listPackages({ ...params, limit: size, cursor: state.cursor }, controller.signal).then(
       (page) =>
-        setState((s) => ({
-          items: appendUnique(s.items, page.items),
-          cursor: page.nextCursor,
-          hasMore: page.nextCursor !== null,
-          status: 'ready',
-          error: null,
-        })),
+        setState((s) =>
+          s.key !== filterKey
+            ? s
+            : {
+                ...s,
+                items: appendUnique(s.items, page.items),
+                cursor: page.nextCursor,
+                hasMore: page.nextCursor !== null,
+                status: 'ready',
+                error: null,
+              },
+        ),
       (e: unknown) => {
         // Keep what is already shown; the button becomes a retry for the same cursor.
-        if (!controller.signal.aborted) setState((s) => ({ ...s, status: 'ready', error: toApiError(e) }))
+        if (!controller.signal.aborted)
+          setState((s) => (s.key !== filterKey ? s : { ...s, status: 'ready', error: toApiError(e) }))
       },
     )
-  }, [state.status, state.cursor, filterKey, pageSize])
+  }, [current, state.status, state.cursor, filterKey])
 
   const retry = useCallback(() => {
-    setState(LOADING)
+    setState((s) => ({ ...s, key: '' })) // shows loading until the reload answers
     setReloadKey((k) => k + 1)
   }, [])
 
-  const { cursor: _cursor, ...publicState } = state
-  return { ...publicState, loadMore, retry }
+  const visible: PackageListState = current
+    ? { items: state.items, status: state.status, error: state.error, hasMore: state.hasMore }
+    : { ...EMPTY, status: 'loading' }
+  return { ...visible, loadMore, retry }
+}
+
+const EMPTY: PackageListState & { cursor: null } = {
+  items: [],
+  status: 'ready',
+  error: null,
+  hasMore: false,
+  cursor: null,
 }
 
 /** A package published between page requests can shift the window; never show it twice. */

@@ -123,3 +123,22 @@ export const AlertIcon = (p: IconProps) => (
     <path d="M12 7v6M12 16h.01" />
   </Svg>
 )
+
+export const SearchIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </Svg>
+)
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+)
+
+export const SortIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5" />
+  </Svg>
+)
