@@ -25,10 +25,12 @@ import {
   type FieldErrors,
   type TextField,
 } from '../lib/contribution'
-import { ImageError, prepareImage, type PreparedImage } from '../lib/images'
+import { fileKey, ImageError, prepareImage, type PreparedImage } from '../lib/images'
+import { formatBytes } from '../lib/format'
 import { useOnline } from '../lib/useOnline'
 
-type Picked = PreparedImage & { key: string; alt: string }
+/** A chosen image; sourceKey identifies the picked file, to ignore picking it twice. */
+type Picked = PreparedImage & { key: string; sourceKey: string; alt: string }
 
 /** Field order on screen, so the first problem gets focus. */
 const FIELD_ORDER: DraftField[] = ['originalTitle', 'author', 'content', 'images', 'resourceLink']
@@ -54,6 +56,7 @@ export function Component() {
   const [showRestored, setShowRestored] = useState(restored)
   const [images, setImages] = useState<Picked[]>([])
   const [preparing, setPreparing] = useState(false)
+  const [preparingNote, setPreparingNote] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [touched, setTouched] = useState<ReadonlySet<TextField>>(new Set())
   const [formError, setFormError] = useState<{ message: string; existingPackageId?: string } | null>(null)
@@ -122,31 +125,49 @@ export function Component() {
     })
   }
 
+  /**
+   * FR-5.4, FR-5.6: up to 3 images, each checked by content and compressed on the device
+   * until it is 500 KB or less. One at a time, so a low-end phone holds one decoded photo.
+   * A file that cannot be used is skipped with a message; the others are still added.
+   */
   async function addImages(files: FileList | null) {
     if (!files || files.length === 0) return
-    const room = LIMITS.maxImages - images.length
-    const chosen = Array.from(files).slice(0, Math.max(0, room))
-    let problem = files.length > room ? `You can add up to ${LIMITS.maxImages} images.` : null
+    const picked = Array.from(files)
+    if (fileInput.current) fileInput.current.value = '' // allow picking the same file again later
+    const known = new Set(images.map((i) => i.sourceKey))
+    const fresh = picked.filter((f) => !known.has(fileKey(f)))
+    const room = Math.max(0, LIMITS.maxImages - images.length)
+    const chosen = fresh.slice(0, room)
+    const problems: string[] = []
+    if (fresh.length < picked.length) problems.push('That image is already added.')
+    if (fresh.length > room) {
+      problems.push(
+        room === 0
+          ? `You can add up to ${LIMITS.maxImages} images.`
+          : `Only ${room} more ${room === 1 ? 'image fits' : 'images fit'}; you can add up to ${LIMITS.maxImages}.`,
+      )
+    }
     setPreparing(true)
     const added: Picked[] = []
-    for (const file of chosen) {
+    for (const [n, file] of chosen.entries()) {
+      setPreparingNote(chosen.length > 1 ? `Preparing image ${n + 1} of ${chosen.length}…` : 'Preparing image…')
       try {
         const prepared = await prepareImage(file)
         const issue = imageProblem(prepared.blob)
         if (issue) {
           URL.revokeObjectURL(prepared.previewUrl)
-          problem = issue
+          problems.push(`${file.name}: ${issue}`)
           continue
         }
-        added.push({ ...prepared, key: `${Date.now()}-${Math.random()}`, alt: '' })
+        added.push({ ...prepared, key: `${Date.now()}-${n}`, sourceKey: fileKey(file), alt: '' })
       } catch (e) {
-        problem = e instanceof ImageError ? e.message : 'This image could not be added.'
+        problems.push(`${file.name}: ${e instanceof ImageError ? e.message : 'This image could not be added.'}`)
       }
     }
     setPreparing(false)
+    setPreparingNote('')
     setImages((current) => [...current, ...added].slice(0, LIMITS.maxImages))
-    setErrors((e) => ({ ...e, images: problem ?? undefined }))
-    if (fileInput.current) fileInput.current.value = '' // allow picking the same file again
+    setErrors((e) => ({ ...e, images: problems.length > 0 ? problems.join(' ') : undefined }))
   }
 
   function removeImage(key: string) {
@@ -371,6 +392,10 @@ export function Component() {
           </div>
           <p id={`${ids.images}-rules`} className="field__hint">
             Maximum {LIMITS.maxImages} images • Up to 500 KB per image (PNG, JPG, WebP)
+            {images.length > 0 && ` • ${images.length} of ${LIMITS.maxImages} added`}
+          </p>
+          <p className="field__hint" role="status" aria-live="polite">
+            {preparingNote}
           </p>
           <FieldError id={`${ids.images}-error`} message={errors.images} />
 
@@ -379,7 +404,14 @@ export function Component() {
               {images.map((image, i) => (
                 <li key={image.key} className="thumb">
                   <img src={image.previewUrl} alt="" className="thumb__img" />
-                  <input
+                  <div className="thumb__body">
+                    <p className="thumb__size">
+                      {formatBytes(image.blob.size)}
+                      {image.reencoded && image.originalBytes > image.blob.size && (
+                        <span> · made smaller from {formatBytes(image.originalBytes)}</span>
+                      )}
+                    </p>
+                    <input
                     className="input input--small"
                     value={image.alt}
                     onChange={(e) =>
@@ -389,6 +421,7 @@ export function Component() {
                     aria-label={`Description of image ${i + 1}`}
                     maxLength={300}
                   />
+                  </div>
                   <button
                     type="button"
                     className="icon-button icon-button--small thumb__remove"

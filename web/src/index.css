@@ -1171,3 +1171,19 @@ button {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.thumb__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.thumb__size {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.field__hint:empty {
+  display: none;
+}
