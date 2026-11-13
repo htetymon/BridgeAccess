@@ -22,7 +22,7 @@ const LOADING: Internal = { items: [], status: 'loading', error: null, hasMore: 
  * Cursor-paged GET /packages. The first page loads on mount; `loadMore` appends the next
  * one; `retry` reloads from the first page. In-flight requests are cancelled on unmount.
  */
-export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'cursor'> = {}) {
+export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'cursor'> = {}, pageSize = PAGE_SIZE) {
   const [state, setState] = useState<Internal>(LOADING)
   const [reloadKey, setReloadKey] = useState(0)
   const moreRequest = useRef<AbortController | null>(null)
@@ -30,7 +30,7 @@ export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'curs
 
   useEffect(() => {
     const controller = new AbortController()
-    listPackages({ ...(JSON.parse(filterKey) as ListPackagesParams), limit: PAGE_SIZE }, controller.signal).then(
+    listPackages({ ...(JSON.parse(filterKey) as ListPackagesParams), limit: pageSize }, controller.signal).then(
       (page) =>
         setState({ items: page.items, cursor: page.nextCursor, hasMore: page.nextCursor !== null, status: 'ready', error: null }),
       (e: unknown) => {
@@ -41,7 +41,7 @@ export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'curs
       controller.abort()
       moreRequest.current?.abort()
     }
-  }, [filterKey, reloadKey])
+  }, [filterKey, reloadKey, pageSize])
 
   const loadMore = useCallback(() => {
     if (state.status !== 'ready' || !state.cursor) return
@@ -49,7 +49,7 @@ export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'curs
     moreRequest.current = controller
     setState((s) => ({ ...s, status: 'loadingMore', error: null }))
     listPackages(
-      { ...(JSON.parse(filterKey) as ListPackagesParams), limit: PAGE_SIZE, cursor: state.cursor },
+      { ...(JSON.parse(filterKey) as ListPackagesParams), limit: pageSize, cursor: state.cursor },
       controller.signal,
     ).then(
       (page) =>
@@ -65,7 +65,7 @@ export function usePackageList(filters: Omit<ListPackagesParams, 'limit' | 'curs
         if (!controller.signal.aborted) setState((s) => ({ ...s, status: 'ready', error: toApiError(e) }))
       },
     )
-  }, [state.status, state.cursor, filterKey])
+  }, [state.status, state.cursor, filterKey, pageSize])
 
   const retry = useCallback(() => {
     setState(LOADING)

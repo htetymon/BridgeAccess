@@ -77,3 +77,49 @@ export const CheckIcon = (p: IconProps) => (
     <path d="m5 12.5 4.5 4.5L19 7.5" />
   </Svg>
 )
+
+export const TrashIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M10 11v6M14 11v6" />
+  </Svg>
+)
+
+export const RefreshIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" />
+  </Svg>
+)
+
+export const LinkIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+  </Svg>
+)
+
+export const InfoIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </Svg>
+)
+
+export const ImageIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <rect x="3" y="4" width="18" height="16" rx="3" />
+    <circle cx="16" cy="9" r="1.5" />
+    <path d="m3 17 5-5 4 4 3-3 6 6" />
+  </Svg>
+)
+
+export const XIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </Svg>
+)
+
+export const AlertIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v6M12 16h.01" />
+  </Svg>
+)

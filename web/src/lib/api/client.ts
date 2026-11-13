@@ -26,6 +26,8 @@ export class ApiError extends Error {
   /** Contract error code, e.g. NOT_FOUND or VALIDATION_FAILED (API doc, section 10). */
   readonly code?: string
   readonly details?: ApiErrorDetail[]
+  /** Code-specific fields of the error, e.g. existingPackageId on DUPLICATE_LINK, resetsAt on DAILY_LIMIT_REACHED. */
+  readonly extras: Record<string, unknown>
   readonly requestId: string
 
   constructor(init: {
@@ -35,6 +37,7 @@ export class ApiError extends Error {
     status?: number
     code?: string
     details?: ApiErrorDetail[]
+    extras?: Record<string, unknown>
   }) {
     super(init.message)
     this.name = 'ApiError'
@@ -42,6 +45,7 @@ export class ApiError extends Error {
     this.status = init.status
     this.code = init.code
     this.details = init.details
+    this.extras = init.extras ?? {}
     this.requestId = init.requestId
   }
 }
@@ -228,19 +232,23 @@ function parseJson(response: RawResponse, requestId: string): unknown {
 
 /** Maps the API error envelope ({ error: { code, message, details, requestId } }). */
 function httpError(response: RawResponse, requestId: string): ApiError {
-  let envelope: { error?: { code?: string; message?: string; details?: ApiErrorDetail[]; requestId?: string } } = {}
+  let envelope: {
+    error?: { code?: string; message?: string; details?: ApiErrorDetail[]; requestId?: string; [extra: string]: unknown }
+  } = {}
   try {
     envelope = JSON.parse(response.text)
   } catch {
     // Not our envelope (proxy or gateway error page).
   }
   const e = envelope.error ?? {}
+  const { code: _c, message: _m, details: _d, requestId: _r, ...extras } = e
   return new ApiError({
     kind: 'http',
     status: response.status,
     code: e.code,
     message: e.message ?? GENERIC_MESSAGE,
     details: e.details,
+    extras,
     requestId: e.requestId ?? requestId,
   })
 }

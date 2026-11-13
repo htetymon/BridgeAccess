@@ -119,6 +119,18 @@ describe('retry', () => {
     expect(calls).toHaveLength(1)
   })
 
+  it('keeps code-specific error fields as extras', async () => {
+    respondWith(
+      json(409, {
+        error: { code: 'DUPLICATE_LINK', message: 'Taken.', requestId: 'x', existingPackageId: 'p1', isOwn: true },
+      }),
+    )
+
+    const err = (await apiRequest('/packages', { method: 'POST', body: {} }).catch((e: unknown) => e)) as ApiError
+    expect(err).toMatchObject({ code: 'DUPLICATE_LINK', extras: { existingPackageId: 'p1', isOwn: true } })
+    expect(err.extras).not.toHaveProperty('code')
+  })
+
   it('does not retry POST unless opted in', async () => {
     respondWith(json(503, {}))
     await expect(apiRequest('/packages', { method: 'POST', body: {} })).rejects.toMatchObject({ status: 503 })

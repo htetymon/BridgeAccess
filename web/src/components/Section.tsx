@@ -1,15 +1,17 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { ChevronRightIcon } from './Icons'
 
 type Props = {
   title: string
   seeAllTo?: string
-  /** Shown until the section is wired to data. */
-  empty: string
+  /** Shown when there are no children (not wired to data yet, or nothing to list). */
+  empty?: string
+  children?: ReactNode
 }
 
 /** A titled list section with an optional "See All" link, as used across the tab screens. */
-export default function Section({ title, seeAllTo, empty }: Props) {
+export default function Section({ title, seeAllTo, empty, children }: Props) {
   return (
     <section className="section">
       <div className="section__head">
@@ -20,7 +22,7 @@ export default function Section({ title, seeAllTo, empty }: Props) {
           </Link>
         )}
       </div>
-      <p className="empty-state">{empty}</p>
+      {children ?? (empty && <p className="empty-state">{empty}</p>)}
     </section>
   )
 }

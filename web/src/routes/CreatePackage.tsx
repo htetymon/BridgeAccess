@@ -1,6 +1,166 @@
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router'
+import { FileTextIcon, ImageIcon, InfoIcon, LinkIcon, PlayIcon, UploadIcon, XIcon } from '../components/Icons'
 import PageHeader from '../components/PageHeader'
+import { createPackage } from '../lib/api/contributions'
+import type { ResourceType } from '../lib/api/packages'
+import {
+  clearDraft,
+  describeCreateError,
+  EMPTY_DRAFT,
+  fieldLabels,
+  imageProblem,
+  isEmptyDraft,
+  LIMITS,
+  loadDraft,
+  saveDraft,
+  toNewPackage,
+  validateDraft,
+  type Draft,
+  type DraftField,
+  type FieldErrors,
+} from '../lib/contribution'
+import { ImageError, prepareImage, type PreparedImage } from '../lib/images'
+import { useOnline } from '../lib/useOnline'
 
+type Picked = PreparedImage & { key: string; alt: string }
+
+/** Field order on screen, so the first problem gets focus. */
+const FIELD_ORDER: DraftField[] = ['originalTitle', 'author', 'content', 'images', 'resourceLink']
+
+/**
+ * Create a Package, text and video (screens 10 and 11, FR-5.2 to FR-5.7, FR-5.9).
+ *
+ * - The text fields are saved on the device as a draft while typing, so going offline,
+ *   leaving, or a failed upload never loses them. Offline, Create is disabled with a reason.
+ * - Images are compressed on the device until they fit the 500 KB cap (FR-5.6).
+ * - Fields are checked here with the server's rules and messages; server errors map back to
+ *   the same fields. A repeat of this device's own earlier submit counts as success.
+ */
 export function Component() {
+  const navigate = useNavigate()
+  const online = useOnline()
+  const [draft, setDraft] = useState<Draft>(loadDraft)
+  const [restored] = useState(() => !isEmptyDraft(draft))
+  const [showRestored, setShowRestored] = useState(restored)
+  const [images, setImages] = useState<Picked[]>([])
+  const [preparing, setPreparing] = useState(false)
+  const [errors, setErrors] = useState<FieldErrors>({})
+  const [formError, setFormError] = useState<{ message: string; existingPackageId?: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [showVisualsHelp, setShowVisualsHelp] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const errorSummary = useRef<HTMLDivElement>(null)
+  const ids = useIds()
+  const labels = fieldLabels(draft.resourceType)
+
+  // Keep the draft on the device (debounced: typing should not write on every key).
+  useEffect(() => {
+    const t = setTimeout(() => saveDraft(draft), 400)
+    return () => clearTimeout(t)
+  }, [draft])
+
+  // Free image previews when they are removed or the screen closes.
+  const previews = useRef(images)
+  useEffect(() => {
+    previews.current = images
+  })
+  useEffect(() => () => previews.current.forEach((i) => URL.revokeObjectURL(i.previewUrl)), [])
+
+  function update<K extends keyof Draft>(key: K, value: Draft[K]) {
+    setDraft((d) => ({ ...d, [key]: value }))
+    if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }))
+  }
+
+  function setType(type: ResourceType) {
+    update('resourceType', type)
+    // The link rule depends on the type (video must be YouTube): re-check only if shown.
+    setErrors((e) => ({ ...e, resourceLink: undefined }))
+  }
+
+  async function addImages(files: FileList | null) {
+    if (!files || files.length === 0) return
+    const room = LIMITS.maxImages - images.length
+    const chosen = Array.from(files).slice(0, Math.max(0, room))
+    let problem = files.length > room ? `You can add up to ${LIMITS.maxImages} images.` : null
+    setPreparing(true)
+    const added: Picked[] = []
+    for (const file of chosen) {
+      try {
+        const prepared = await prepareImage(file)
+        const issue = imageProblem(prepared.blob)
+        if (issue) {
+          URL.revokeObjectURL(prepared.previewUrl)
+          problem = issue
+          continue
+        }
+        added.push({ ...prepared, key: `${Date.now()}-${Math.random()}`, alt: '' })
+      } catch (e) {
+        problem = e instanceof ImageError ? e.message : 'This image could not be added.'
+      }
+    }
+    setPreparing(false)
+    setImages((current) => [...current, ...added].slice(0, LIMITS.maxImages))
+    setErrors((e) => ({ ...e, images: problem ?? undefined }))
+    if (fileInput.current) fileInput.current.value = '' // allow picking the same file again
+  }
+
+  function removeImage(key: string) {
+    setImages((current) => {
+      const gone = current.find((i) => i.key === key)
+      if (gone) URL.revokeObjectURL(gone.previewUrl)
+      return current.filter((i) => i.key !== key)
+    })
+    setErrors((e) => ({ ...e, images: undefined }))
+  }
+
+  function showErrors(next: FieldErrors) {
+    setErrors(next)
+    const first = FIELD_ORDER.find((f) => next[f])
+    if (first) document.getElementById(ids[first])?.focus()
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    if (submitting || preparing || !online) return
+    setFormError(null)
+    const problems = validateDraft(draft)
+    if (Object.values(problems).some(Boolean)) {
+      showErrors(problems)
+      return
+    }
+    setSubmitting(true)
+    try {
+      const created = await createPackage(
+        toNewPackage(draft, images.map((i) => i.alt)),
+        images.map((i) => new File([i.blob], i.name, { type: i.blob.type })),
+      )
+      done(created.id)
+    } catch (e) {
+      const outcome = describeCreateError(e)
+      if (outcome.kind === 'created') {
+        done(outcome.packageId)
+        return
+      }
+      setSubmitting(false)
+      setFormError({ message: outcome.message, existingPackageId: outcome.existingPackageId })
+      if (Object.keys(outcome.fieldErrors).length > 0) showErrors(outcome.fieldErrors)
+      else errorSummary.current?.focus()
+    }
+  }
+
+  function done(packageId: string) {
+    clearDraft()
+    navigate('/contribute', { replace: true, state: { created: packageId } })
+  }
+
+  function discardDraft() {
+    setDraft(EMPTY_DRAFT)
+    setErrors({})
+    setShowRestored(false)
+    clearDraft()
+  }
+
   return (
     <main className="screen">
       <title>Create a Package · BridgeAccess</title>
@@ -9,7 +169,323 @@ export function Component() {
         subtitle="Share a learning package with the community."
         back={{ fallback: '/contribute' }}
       />
-      <p className="empty-state">The package form will appear here.</p>
+
+      {showRestored && (
+        <div className="notice" role="status">
+          <InfoIcon size={20} />
+          <p>We kept your unfinished package. Images are not kept; add them again.</p>
+          <button type="button" className="notice__action" onClick={discardDraft}>
+            Start over
+          </button>
+        </div>
+      )}
+
+      {formError && (
+        <div className="notice notice--error" role="alert" tabIndex={-1} ref={errorSummary}>
+          <p>
+            {formError.message}{' '}
+            {formError.existingPackageId && (
+              <Link to={`/packages/${formError.existingPackageId}`}>Open the existing package</Link>
+            )}
+          </p>
+        </div>
+      )}
+
+      <form className="form" onSubmit={submit} noValidate>
+        <fieldset className="field">
+          <legend className="field__label">
+            Resource Type <Required />
+          </legend>
+          <div className="type-options">
+            <TypeOption type="text" current={draft.resourceType} onChange={setType} icon={<FileTextIcon size={20} />}>
+              Text Resource
+            </TypeOption>
+            <TypeOption type="video" current={draft.resourceType} onChange={setType} icon={<PlayIcon size={20} />}>
+              Video Resource
+            </TypeOption>
+          </div>
+        </fieldset>
+
+        <TextField
+          id={ids.originalTitle}
+          label={labels.title}
+          required
+          value={draft.originalTitle}
+          onChange={(v) => update('originalTitle', v)}
+          placeholder={draft.resourceType === 'video' ? 'Enter the title of the video' : 'Enter the original title'}
+          maxLength={LIMITS.titleChars}
+          error={errors.originalTitle}
+        />
+
+        <TextField
+          id={ids.author}
+          label={labels.author}
+          required
+          value={draft.author}
+          onChange={(v) => update('author', v)}
+          placeholder={draft.resourceType === 'video' ? 'Enter the channel name' : 'Enter the author'}
+          maxLength={LIMITS.authorChars}
+          error={errors.author}
+          autoComplete="off"
+        />
+
+        <div className="field">
+          <label className="field__label" htmlFor={ids.content}>
+            {labels.content} <span className="field__optional">(Optional)</span>
+          </label>
+          <textarea
+            id={ids.content}
+            className="input input--area"
+            rows={5}
+            value={draft.content}
+            onChange={(e) => update('content', e.target.value)}
+            placeholder={
+              draft.resourceType === 'video'
+                ? 'Paste the video transcript here'
+                : 'Paste the article or resource content here'
+            }
+            maxLength={LIMITS.contentChars}
+            aria-invalid={Boolean(errors.content)}
+            aria-describedby={`${ids.content}-hint ${ids.content}-count${errors.content ? ` ${ids.content}-error` : ''}`}
+          />
+          <div className="field__foot">
+            <span id={`${ids.content}-hint`} className="field__hint">
+              {draft.resourceType === 'video'
+                ? "Without a transcript we try the video page; if that doesn't work you'll be asked to paste one."
+                : "Leave empty and we read the link. Paste the text if the page needs a login."}
+            </span>
+            <span id={`${ids.content}-count`} className="field__count" aria-live="polite">
+              {draft.content.length.toLocaleString('en-US')}/{LIMITS.contentChars.toLocaleString('en-US')}
+            </span>
+          </div>
+          <FieldError id={`${ids.content}-error`} message={errors.content} />
+        </div>
+
+        <div className="field">
+          <div className="field__label-row">
+            <span className="field__label" id={`${ids.images}-label`}>
+              Add Visuals <span className="field__optional">(Optional)</span>
+            </span>
+            <button
+              type="button"
+              className="icon-button icon-button--small"
+              aria-expanded={showVisualsHelp}
+              aria-controls={`${ids.images}-help`}
+              aria-label="About visuals"
+              onClick={() => setShowVisualsHelp((s) => !s)}
+            >
+              <InfoIcon size={18} />
+            </button>
+          </div>
+          {showVisualsHelp && (
+            <p id={`${ids.images}-help`} className="field__hint field__help">
+              Images make this a "With Visual" package and add a Diagram step. Large photos are made smaller on your
+              phone before uploading, to save data.
+            </p>
+          )}
+
+          <div className="dropzone">
+            <div className="dropzone__art" aria-hidden="true">
+              <ImageIcon size={32} />
+            </div>
+            <div className="dropzone__body">
+              <p>
+                {draft.resourceType === 'video'
+                  ? 'Add supporting images (e.g., key frame, diagram, summary)'
+                  : 'Add images (e.g., diagram, chart, illustration)'}
+              </p>
+              <button
+                id={ids.images}
+                type="button"
+                className="button button--outline button--small"
+                onClick={() => fileInput.current?.click()}
+                disabled={images.length >= LIMITS.maxImages || preparing}
+                aria-describedby={`${ids.images}-rules${errors.images ? ` ${ids.images}-error` : ''}`}
+              >
+                <UploadIcon size={18} /> {preparing ? 'Preparing…' : 'Choose Images'}
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                hidden
+                onChange={(e) => addImages(e.target.files)}
+              />
+            </div>
+          </div>
+          <p id={`${ids.images}-rules`} className="field__hint">
+            Maximum {LIMITS.maxImages} images • Up to 500 KB per image (PNG, JPG, WebP)
+          </p>
+          <FieldError id={`${ids.images}-error`} message={errors.images} />
+
+          {images.length > 0 && (
+            <ul className="thumbs" aria-label="Chosen images">
+              {images.map((image, i) => (
+                <li key={image.key} className="thumb">
+                  <img src={image.previewUrl} alt="" className="thumb__img" />
+                  <input
+                    className="input input--small"
+                    value={image.alt}
+                    onChange={(e) =>
+                      setImages((all) => all.map((x) => (x.key === image.key ? { ...x, alt: e.target.value } : x)))
+                    }
+                    placeholder="Describe the image (optional)"
+                    aria-label={`Description of image ${i + 1}`}
+                    maxLength={300}
+                  />
+                  <button
+                    type="button"
+                    className="icon-button icon-button--small thumb__remove"
+                    onClick={() => removeImage(image.key)}
+                    aria-label={`Remove image ${i + 1}`}
+                  >
+                    <XIcon size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="field">
+          <label className="field__label" htmlFor={ids.resourceLink}>
+            Resource Link <Required />
+          </label>
+          <div className="input-with-icon">
+            <LinkIcon size={20} />
+            <input
+              id={ids.resourceLink}
+              className="input"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={draft.resourceLink}
+              onChange={(e) => update('resourceLink', e.target.value)}
+              onBlur={() => {
+                if (draft.resourceLink.trim()) {
+                  const problem = validateDraft(draft).resourceLink
+                  setErrors((e) => ({ ...e, resourceLink: problem }))
+                }
+              }}
+              placeholder={labels.link}
+              required
+              aria-invalid={Boolean(errors.resourceLink)}
+              aria-describedby={errors.resourceLink ? `${ids.resourceLink}-error` : undefined}
+            />
+          </div>
+          <FieldError id={`${ids.resourceLink}-error`} message={errors.resourceLink} />
+        </div>
+
+        {!online && (
+          <p className="notice" role="status">
+            <InfoIcon size={20} />
+            <span>You're offline. Creating a package needs a connection. Your draft is saved on this device.</span>
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="button button--primary button--block form__submit"
+          disabled={submitting || preparing || !online}
+        >
+          {submitting ? 'Uploading…' : 'Create Package'}
+        </button>
+      </form>
     </main>
+  )
+}
+
+function useIds(): Record<DraftField, string> {
+  const base = useId()
+  return {
+    resourceType: `${base}-type`,
+    originalTitle: `${base}-title`,
+    author: `${base}-author`,
+    content: `${base}-content`,
+    images: `${base}-images`,
+    resourceLink: `${base}-link`,
+  }
+}
+
+function Required() {
+  return (
+    <span className="field__required" aria-hidden="true">
+      *
+    </span>
+  )
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null
+  return (
+    <p id={id} className="field__error">
+      {message}
+    </p>
+  )
+}
+
+function TypeOption({
+  type,
+  current,
+  onChange,
+  icon,
+  children,
+}: {
+  type: ResourceType
+  current: ResourceType
+  onChange: (t: ResourceType) => void
+  icon: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <label className={`type-option${current === type ? ' type-option--selected' : ''}`}>
+      <input
+        type="radio"
+        name="resourceType"
+        value={type}
+        checked={current === type}
+        onChange={() => onChange(type)}
+        className="type-option__radio"
+      />
+      {icon}
+      <span>{children}</span>
+    </label>
+  )
+}
+
+function TextField(props: {
+  id: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  maxLength: number
+  required?: boolean
+  error?: string
+  autoComplete?: string
+}) {
+  const errorId = `${props.id}-error`
+  return (
+    <div className="field">
+      <label className="field__label" htmlFor={props.id}>
+        {props.label} {props.required && <Required />}
+      </label>
+      <input
+        id={props.id}
+        className="input"
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        placeholder={props.placeholder}
+        maxLength={props.maxLength}
+        required={props.required}
+        autoComplete={props.autoComplete}
+        aria-invalid={Boolean(props.error)}
+        aria-describedby={props.error ? errorId : undefined}
+      />
+      <FieldError id={errorId} message={props.error} />
+    </div>
   )
 }
