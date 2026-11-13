@@ -1,16 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import type { MyPackage } from '../lib/api/contributions'
+import type { RetryProblem } from '../lib/contribution'
 import { PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
 import { AlertIcon, CheckIcon, FileTextIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
 
-type Props = {
+type Actions = {
+  /** Resolves to null on success, or the problem to show. */
+  onRetry: (id: string) => Promise<RetryProblem | null>
+  /** Resolves to null on success, or an error message. */
+  onDelete: (id: string) => Promise<string | null>
+  /** Look again now for a package that is still working after the polling limit. */
+  onCheckAgain: (id: string) => void
+}
+
+type Props = Actions & {
   pkg: MyPackage
   /** Still processing after about 3 minutes of polling. */
   stalled?: boolean
-  /** Resolve to an error message, or null on success. */
-  onRetry: (id: string) => Promise<string | null>
-  onDelete: (id: string) => Promise<string | null>
 }
 
 /**
@@ -19,24 +26,35 @@ type Props = {
  * reason and a Retry button), or the published package with its chips and Learnt badge.
  * Only a published package links to its page; the others have nothing to open yet.
  */
-export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete }: Props) {
+export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete, onCheckAgain }: Props) {
   const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<'retry' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retryProblem, setRetryProblem] = useState<RetryProblem | null>(null)
   const Icon = pkg.resourceType === 'video' ? PlayIcon : FileTextIcon
   const title = pkg.title ?? pkg.originalTitle
+  // Once the server said Retry cannot help, offer the way forward instead of a dead button.
+  const retryBlocked = retryProblem !== null && !retryProblem.canRetry
 
-  async function run(action: (id: string) => Promise<string | null>) {
-    setBusy(true)
+  async function retry() {
+    setBusy('retry')
     setError(null)
-    const message = await action(pkg.id)
-    setBusy(false)
+    const problem = await onRetry(pkg.id)
+    setBusy(null)
+    setRetryProblem(problem)
+  }
+
+  async function remove() {
+    setBusy('delete')
+    setError(null)
+    const message = await onDelete(pkg.id)
+    setBusy(null)
     setConfirming(false)
     if (message) setError(message)
   }
 
   return (
-    <article className={`package-card my-package my-package--${pkg.status}`} aria-busy={busy}>
+    <article className={`package-card my-package my-package--${pkg.status}`} aria-busy={busy !== null}>
       <div className={`package-card__icon package-card__icon--${pkg.resourceType}`}>
         <Icon />
         <span className="visually-hidden">{RESOURCE_TYPE_LABEL[pkg.resourceType]} resource</span>
@@ -66,14 +84,21 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete 
         )}
 
         {pkg.status === 'processing' && (
-          <p className="my-package__status" role="status">
-            <span className="chip chip--progress">
-              <span className="spinner spinner--tiny" aria-hidden="true" /> Processing
-            </span>
-            <span className="my-package__hint">
-              {stalled ? 'Still working, check back later.' : 'Building your lesson. This usually takes a minute.'}
-            </span>
-          </p>
+          <div className="my-package__processing">
+            <p className="my-package__status">
+              <span className="chip chip--progress">
+                {!stalled && <span className="spinner spinner--tiny" aria-hidden="true" />} Processing
+              </span>
+              <span className="my-package__hint">
+                {stalled ? 'Still working, check back later.' : 'Building your lesson. This usually takes a minute.'}
+              </span>
+            </p>
+            {stalled && (
+              <button type="button" className="button button--secondary button--small" onClick={() => onCheckAgain(pkg.id)}>
+                <RefreshIcon size={18} /> Check again
+              </button>
+            )}
+          </div>
         )}
 
         {pkg.status === 'failed' && (
@@ -84,40 +109,48 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete 
               </span>
             </p>
             {pkg.failureReason && <p className="my-package__reason">{pkg.failureReason}</p>}
-            <button
-              type="button"
-              className="button button--secondary button--small"
-              onClick={() => run(onRetry)}
-              disabled={busy}
-            >
-              <RefreshIcon size={18} /> {busy ? 'Retrying…' : 'Retry'}
-            </button>
+            {retryBlocked ? (
+              <div className="my-package__next">
+                {retryProblem.existingPackageId && (
+                  <Link to={`/packages/${retryProblem.existingPackageId}`} className="button button--secondary button--small">
+                    Open that package
+                  </Link>
+                )}
+                <Link to="/contribute/new" className="button button--secondary button--small">
+                  Create it again
+                </Link>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="button button--secondary button--small"
+                onClick={retry}
+                disabled={busy !== null}
+              >
+                <RefreshIcon size={18} /> {busy === 'retry' ? 'Retrying…' : 'Retry'}
+              </button>
+            )}
           </div>
         )}
 
-        {error && (
+        {(error ?? retryProblem?.message) && (
           <p className="my-package__error" role="alert">
-            {error}
+            {error ?? retryProblem?.message}
           </p>
         )}
 
         {confirming && (
           <div className="my-package__confirm" role="group" aria-label={`Delete ${title}?`}>
-            <p>Delete this package? It will be removed for everyone.</p>
+            <p>Delete this package? It will be removed for everyone. Devices that downloaded it keep their copy.</p>
             <div className="my-package__confirm-actions">
-              <button
-                type="button"
-                className="button button--danger button--small"
-                onClick={() => run(onDelete)}
-                disabled={busy}
-              >
-                {busy ? 'Deleting…' : 'Delete'}
+              <button type="button" className="button button--danger button--small" onClick={remove} disabled={busy !== null}>
+                {busy === 'delete' ? 'Deleting…' : 'Delete'}
               </button>
               <button
                 type="button"
                 className="button button--secondary button--small"
                 onClick={() => setConfirming(false)}
-                disabled={busy}
+                disabled={busy !== null}
               >
                 Cancel
               </button>
@@ -132,7 +165,7 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete 
           className="icon-button package-card__action"
           onClick={() => setConfirming(true)}
           aria-label={`Delete ${title}`}
-          disabled={busy}
+          disabled={busy !== null}
         >
           <TrashIcon />
         </button>
@@ -145,21 +178,22 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete 
 export function MyPackageList({
   items,
   stalled,
-  onRetry,
-  onDelete,
-}: {
-  items: MyPackage[]
-  stalled: ReadonlySet<string>
-  onRetry: Props['onRetry']
-  onDelete: Props['onDelete']
-}) {
+  announcement,
+  ...actions
+}: Actions & { items: MyPackage[]; stalled: ReadonlySet<string>; announcement: string }) {
   return (
-    <ul className="package-list" aria-label="My contributions">
-      {items.map((pkg) => (
-        <li key={pkg.id}>
-          <MyPackageCard pkg={pkg} stalled={stalled.has(pkg.id)} onRetry={onRetry} onDelete={onDelete} />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="package-list" aria-label="My contributions">
+        {items.map((pkg) => (
+          <li key={pkg.id}>
+            <MyPackageCard pkg={pkg} stalled={stalled.has(pkg.id)} {...actions} />
+          </li>
+        ))}
+      </ul>
+      {/* Status changes found by polling ("… is ready"), read out without moving focus. */}
+      <p className="visually-hidden" role="status" aria-live="polite">
+        {announcement}
+      </p>
+    </>
   )
 }

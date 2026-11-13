@@ -1187,3 +1187,21 @@ button {
 .field__hint:empty {
   display: none;
 }
+
+.button[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.my-package__processing,
+.my-package__next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.my-package__processing {
+  display: grid;
+  justify-items: start;
+}

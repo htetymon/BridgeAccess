@@ -4,6 +4,7 @@ import {
   clearDraft,
   contentCounter,
   describeCreateError,
+  describeRetryError,
   EMPTY_DRAFT,
   imageProblem,
   isYouTubeLink,
@@ -12,6 +13,7 @@ import {
   pollDelay,
   POLL_GIVE_UP_MS,
   saveDraft,
+  statusAnnouncement,
   toNewPackage,
   validateDraft,
   validateField,
@@ -299,5 +301,54 @@ describe('describeCreateError', () => {
       const outcome = describeCreateError(new ApiError({ kind, message: 'x', requestId: 'r' }))
       expect(outcome.kind === 'error' && outcome.message).toMatch(/draft is saved/i)
     }
+  })
+})
+
+describe('describeRetryError', () => {
+  const api = (init: Partial<ConstructorParameters<typeof ApiError>[0]>) =>
+    new ApiError({ kind: 'http', message: 'msg', requestId: 'r', ...init })
+
+  it('stops offering Retry when the server refuses for good', () => {
+    expect(
+      describeRetryError(api({ status: 409, code: 'NOT_RETRYABLE', message: "This package can't be retried again." })),
+    ).toEqual({ message: "This package can't be retried again.", canRetry: false })
+  })
+
+  it('points to the package that took the link', () => {
+    expect(
+      describeRetryError(api({ status: 409, code: 'DUPLICATE_LINK', extras: { existingPackageId: 'p9', isOwn: false } })),
+    ).toMatchObject({ canRetry: false, existingPackageId: 'p9' })
+  })
+
+  it('drops a package deleted elsewhere', () => {
+    expect(describeRetryError(api({ status: 404, code: 'NOT_FOUND' }))).toMatchObject({ gone: true, canRetry: false })
+  })
+
+  it('keeps Retry for passing trouble', () => {
+    expect(describeRetryError(new ApiError({ kind: 'offline', message: 'x', requestId: 'r' }))).toEqual({
+      message: "You're offline. Connect to the internet to retry.",
+      canRetry: true,
+    })
+    expect(describeRetryError(api({ status: 503, message: 'Busy' })).canRetry).toBe(true)
+  })
+})
+
+describe('statusAnnouncement', () => {
+  const processing = { status: 'processing', title: null, originalTitle: 'Renewable Energy 101', failureReason: null }
+
+  it('announces a finished package by its new title', () => {
+    expect(statusAnnouncement(processing, { ...processing, status: 'published', title: 'Clean Energy Basics' })).toBe(
+      '“Clean Energy Basics” is ready.',
+    )
+  })
+
+  it('announces a failure with its reason', () => {
+    expect(
+      statusAnnouncement(processing, { ...processing, status: 'failed', failureReason: 'This took too long. Please try again.' }),
+    ).toBe('“Renewable Energy 101” could not be built. This took too long. Please try again.')
+  })
+
+  it('says nothing when nothing changed', () => {
+    expect(statusAnnouncement(processing, processing)).toBeNull()
   })
 })

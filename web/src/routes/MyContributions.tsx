@@ -45,7 +45,14 @@ export function Component() {
           </div>
         ) : (
           <>
-            <MyPackageList items={mine.items} stalled={mine.stalled} onRetry={mine.retry} onDelete={mine.remove} />
+            <MyPackageList
+              items={mine.items}
+              stalled={mine.stalled}
+              announcement={mine.announcement}
+              onRetry={mine.retry}
+              onDelete={mine.remove}
+              onCheckAgain={mine.checkAgain}
+            />
             {mine.error && (
               <p className="list-more-error" role="alert">
                 {mine.error.message}

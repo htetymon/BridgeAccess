@@ -313,3 +313,56 @@ function tooLong(max: number) {
 function str(v: unknown) {
   return typeof v === 'string' ? v : ''
 }
+
+// ------------------------------------------------------------ retry errors
+
+export type RetryProblem = {
+  message: string
+  /** False when tapping Retry again cannot help (budget used up, link taken, not failed). */
+  canRetry: boolean
+  /** Another package now uses this link: offer to open it. */
+  existingPackageId?: string
+  /** The package no longer exists (deleted elsewhere): drop it from the list. */
+  gone?: boolean
+}
+
+/** Turns a failed POST /me/packages/{id}/retry into what the card shows. */
+export function describeRetryError(error: unknown): RetryProblem {
+  if (!(error instanceof ApiError)) return { message: 'Something went wrong. Please try again.', canRetry: true }
+  switch (error.code) {
+    case 'NOT_RETRYABLE':
+      // The server's message says why: retries used up ("create it again"), or not failed.
+      return { message: error.message, canRetry: false }
+    case 'DUPLICATE_LINK': {
+      const existing = typeof error.extras.existingPackageId === 'string' ? error.extras.existingPackageId : undefined
+      return {
+        message:
+          error.extras.isOwn === true
+            ? 'You already have a newer package for this link.'
+            : 'Someone has since made a package for this link. You can learn from it instead.',
+        canRetry: false,
+        existingPackageId: existing,
+      }
+    }
+    case 'NOT_FOUND':
+      return { message: 'This package no longer exists.', canRetry: false, gone: true }
+    default:
+      return {
+        message:
+          error.kind === 'offline' ? "You're offline. Connect to the internet to retry." : error.message,
+        canRetry: true,
+      }
+  }
+}
+
+/** What to read out when polling sees a package finish, or null if nothing changed. */
+export function statusAnnouncement(
+  before: { status: string; title: string | null; originalTitle: string },
+  after: { status: string; title: string | null; originalTitle: string; failureReason: string | null },
+): string | null {
+  if (before.status === after.status) return null
+  if (after.status === 'published') return `“${after.title ?? after.originalTitle}” is ready.`
+  if (after.status === 'failed')
+    return `“${after.originalTitle}” could not be built.${after.failureReason ? ` ${after.failureReason}` : ''}`
+  return null
+}

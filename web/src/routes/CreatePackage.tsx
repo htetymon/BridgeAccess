@@ -64,6 +64,7 @@ export function Component() {
   const [showVisualsHelp, setShowVisualsHelp] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const errorSummary = useRef<HTMLDivElement>(null)
+  const offlineNote = useRef<HTMLParagraphElement>(null)
   const ids = useIds()
   const labels = fieldLabels(draft.resourceType)
   const counter = contentCounter(draft.content.length)
@@ -187,7 +188,11 @@ export function Component() {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (submitting || preparing || !online) return
+    if (submitting || preparing) return
+    if (!online) {
+      offlineNote.current?.focus()
+      return
+    }
     setFormError(null)
     setTouched(new Set(TEXT_FIELDS))
     // Tidy the link even if the field was never left (Create tapped straight from it).
@@ -475,7 +480,7 @@ export function Component() {
         </div>
 
         {!online && (
-          <p className="notice" role="status">
+          <p id={`${ids.resourceType}-offline`} className="notice" role="status" tabIndex={-1} ref={offlineNote}>
             <InfoIcon size={20} />
             <span>You're offline. Creating a package needs a connection. Your draft is saved on this device.</span>
           </p>
@@ -484,9 +489,13 @@ export function Component() {
         <button
           type="submit"
           className="button button--primary button--block form__submit"
-          disabled={submitting || preparing || !online}
+          // aria-disabled rather than disabled when offline: the button stays focusable, so
+          // keyboard and screen-reader users reach it and hear why it does not work.
+          disabled={submitting || preparing}
+          aria-disabled={!online}
+          aria-describedby={online ? undefined : `${ids.resourceType}-offline`}
         >
-          {submitting ? 'Uploading…' : 'Create Package'}
+          {submitting ? 'Uploading…' : online ? 'Create Package' : 'Create Package (needs a connection)'}
         </button>
       </form>
     </main>

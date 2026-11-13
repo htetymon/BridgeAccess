@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { CheckIcon, UploadIcon, XIcon } from '../components/Icons'
+import { CheckIcon, InfoIcon, UploadIcon, XIcon } from '../components/Icons'
 import { MyPackageList } from '../components/MyPackageCard'
 import PackageCard, { PackageCardSkeleton } from '../components/PackageCard'
 import PageHeader from '../components/PageHeader'
@@ -45,9 +45,22 @@ export function Component() {
       <title>Contribute · BridgeAccess</title>
       <PageHeader title="Contribute" subtitle="Share your learning materials with the community." />
 
-      <Link to="/contribute/new" className="button button--primary button--block">
+      {/* Still opens offline: the form keeps a draft, and its Create button explains the wait (FR-5.9). */}
+      <Link
+        to="/contribute/new"
+        className="button button--primary button--block"
+        aria-describedby={online ? undefined : 'create-offline-note'}
+      >
         <UploadIcon /> Create a Package
       </Link>
+      {!online && (
+        <p id="create-offline-note" className="notice" role="status">
+          <InfoIcon size={20} />
+          <span>
+            You're offline. You can start a package now and it is saved on this device; sending it needs a connection.
+          </span>
+        </p>
+      )}
 
       {justCreated && (
         <div className="notice notice--success" role="status">
@@ -67,7 +80,14 @@ export function Component() {
         ) : mine.items.length === 0 ? (
           <p className="empty-state">Packages you create will appear here.</p>
         ) : (
-          <MyPackageList items={mine.items} stalled={mine.stalled} onRetry={mine.retry} onDelete={mine.remove} />
+          <MyPackageList
+            items={mine.items}
+            stalled={mine.stalled}
+            announcement={mine.announcement}
+            onRetry={mine.retry}
+            onDelete={mine.remove}
+            onCheckAgain={mine.checkAgain}
+          />
         )}
       </Section>
 
