@@ -44,7 +44,7 @@ class LessonGeneratorTest {
 
 	private final LessonGenerator generator = new LessonGenerator(this.gemini, new LessonValidator(), this.repository,
 			new GenerationProperties(2, 50, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(30),
-					Duration.ofSeconds(30), Duration.ZERO, Duration.ofMinutes(30)));
+					Duration.ofSeconds(30), Duration.ZERO, Duration.ofMinutes(30), Duration.ofHours(1)));
 
 	@Test
 	void returnsAValidLessonFromTheFirstAttempt() {

@@ -41,12 +41,16 @@ public class GenerationConfig {
 	 * @param retryDelay wait before the one retry when Gemini was busy or unreachable (FR-6.4)
 	 * @param deferWindow while a package is younger than this, a run that ends with Gemini busy
 	 * puts it back in the queue instead of failing it
+	 * @param maxWait a package still waiting to start (never claimed) this long after its last
+	 * change is marked {@code failed}; covers what the {@code timeout} cannot, since that only
+	 * starts once a worker claims the package
 	 */
 	@ConfigurationProperties("bridgeaccess.generation")
 	public record GenerationProperties(@DefaultValue("2") int workers, @DefaultValue("50") int queueCapacity,
 			@DefaultValue("5m") Duration timeout, @DefaultValue("30s") Duration sweepInterval,
 			@DefaultValue("30s") Duration requeueGrace, @DefaultValue("30s") Duration shutdownWait,
-			@DefaultValue("3s") Duration retryDelay, @DefaultValue("30m") Duration deferWindow) {
+			@DefaultValue("3s") Duration retryDelay, @DefaultValue("30m") Duration deferWindow,
+			@DefaultValue("1h") Duration maxWait) {
 
 		public GenerationProperties {
 			if (workers < 1) {

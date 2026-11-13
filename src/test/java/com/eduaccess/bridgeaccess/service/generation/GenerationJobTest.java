@@ -34,7 +34,7 @@ class GenerationJobTest {
 
 	private final GenerationJob job = new GenerationJob(this.repository, this.generator,
 			new GenerationProperties(2, 50, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(30),
-					Duration.ofSeconds(30), Duration.ZERO, WINDOW));
+					Duration.ofSeconds(30), Duration.ZERO, WINDOW, Duration.ofHours(1)));
 
 	@Test
 	void generatesClaimedPackage() {

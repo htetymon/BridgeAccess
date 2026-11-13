@@ -164,6 +164,22 @@ public class GenerationRepository {
 				UUID.class);
 	}
 
+	/**
+	 * Fails packages that have waited to start (never claimed) longer than {@code maxWait}
+	 * since their last change; returns their IDs. Normally a package is claimed within seconds,
+	 * and a deferral resets the clock, so only a package the queue keeps missing gets here.
+	 */
+	public List<UUID> failNeverStarted(Duration maxWait, String reason) {
+		String sql = """
+				update app.learning_packages
+				   set status = 'failed', failure_reason = :reason
+				 where status = 'processing' and processing_started_at is null and deleted_at is null
+				   and updated_at < now() - make_interval(secs => :maxWaitSeconds)
+				returning id""";
+		return this.jdbc.queryForList(sql, new MapSqlParameterSource("reason", reason).addValue("maxWaitSeconds",
+				maxWait.toMillis() / 1000.0), UUID.class);
+	}
+
 	/** Fails every package claimed longer ago than {@code timeout}; returns their IDs. */
 	public List<UUID> failStuck(Duration timeout, String reason) {
 		String sql = """

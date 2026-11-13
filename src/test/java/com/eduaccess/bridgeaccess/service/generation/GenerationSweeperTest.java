@@ -25,7 +25,7 @@ class GenerationSweeperTest {
 
 	private final GenerationProperties properties = new GenerationProperties(2, 50, Duration.ofMinutes(5),
 			Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ZERO,
-			Duration.ofMinutes(30));
+			Duration.ofMinutes(30), Duration.ofHours(1));
 
 	private final GenerationSweeper sweeper = new GenerationSweeper(this.repository, this.dispatcher, this.properties);
 
@@ -57,6 +57,26 @@ class GenerationSweeperTest {
 		given(this.repository.failStuck(any(), any())).willThrow(new DataAccessResourceFailureException("db down"));
 
 		this.sweeper.sweep(); // does not throw
+	}
+
+	@Test
+	void failsPackagesThatNeverStartedWithTheTimeoutMessage() {
+		this.sweeper.sweep();
+
+		verify(this.repository).failNeverStarted(Duration.ofHours(1), GenerationFailedException.TIMED_OUT);
+	}
+
+	@Test
+	void oneFailingStepDoesNotSkipTheOthers() {
+		UUID waiting = UUID.randomUUID();
+		given(this.repository.failStuck(any(), any())).willThrow(new DataAccessResourceFailureException("db down"));
+		given(this.dispatcher.freeCapacity()).willReturn(5);
+		given(this.repository.findWaiting(any(), anyInt())).willReturn(List.of(waiting));
+
+		this.sweeper.sweep();
+
+		verify(this.repository).failNeverStarted(any(), any());
+		verify(this.dispatcher).submit(waiting);
 	}
 
 }
