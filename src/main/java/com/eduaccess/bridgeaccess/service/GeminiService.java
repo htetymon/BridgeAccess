@@ -25,8 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Calls Gemini {@code generateContent} with structured JSON output and returns the parsed
- * lesson. One call, no retries: the job's validation step decides whether to try again
- * (FR-6.4). Runs on a generation worker, never on a request thread.
+ * lesson. One call, no retries: {@code LessonGenerator} validates and decides whether to try
+ * again (FR-6.4). Runs on a generation worker, never on a request thread.
  */
 @Service
 public class GeminiService {
@@ -54,20 +54,32 @@ public class GeminiService {
 	}
 
 	public GeneratedLesson generateLesson(LessonSource source) {
+		return generateLesson(source, null);
+	}
+
+	/**
+	 * @param correction what was wrong with the previous answer (see
+	 * {@link LessonPrompt#correction}), or null on a first attempt; sent after the source,
+	 * outside its fence
+	 */
+	public GeneratedLesson generateLesson(LessonSource source, String correction) {
 		if (!this.properties.hasApiKey()) {
 			throw new GeminiException(Kind.MISCONFIGURED, "GEMINI_API_KEY is not set");
 		}
 		long start = System.nanoTime();
-		GenerateResponse response = call(requestBody(source));
+		GenerateResponse response = call(requestBody(source, correction));
 		String json = answerText(response);
 		GeneratedLesson lesson = parse(json);
 		logUsage(response, start);
 		return lesson;
 	}
 
-	private Map<String, Object> requestBody(LessonSource source) {
+	private Map<String, Object> requestBody(LessonSource source, String correction) {
 		String user = LessonPrompt.userText(source.originalTitle(), source.author(), source.resourceLink(),
 				source.resourceType(), source.sourceText());
+		if (correction != null && !correction.isBlank()) {
+			user = user + "\n\n" + correction;
+		}
 		return Map.of("systemInstruction", Map.of("parts", List.of(Map.of("text", LessonPrompt.SYSTEM_INSTRUCTION))),
 				"contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", user)))),
 				"generationConfig",

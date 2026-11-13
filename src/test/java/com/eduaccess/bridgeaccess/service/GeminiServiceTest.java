@@ -98,6 +98,21 @@ class GeminiServiceTest {
 	}
 
 	@Test
+	void retrySendsTheCorrectionAfterTheSource() {
+		String correction = LessonPrompt.correction(java.util.List.of("quiz has 4 questions; give exactly 5"));
+		this.server.expect(requestTo(URL))
+			.andExpect(jsonPath("$.contents[0].parts[0].text",
+					Matchers.allOf(Matchers.containsString("</source>\n\nYour previous lesson for this source was rejected"),
+							Matchers.containsString("- quiz has 4 questions; give exactly 5"),
+							Matchers.endsWith("following every rule."))))
+			.andRespond(withSuccess(answer(LESSON, "STOP"), MediaType.APPLICATION_JSON));
+
+		this.service.generateLesson(SOURCE, correction);
+
+		this.server.verify();
+	}
+
+	@Test
 	void skipsThoughtParts() {
 		String body = json(Map.of("candidates", java.util.List.of(Map.of("finishReason", "STOP", "content",
 				Map.of("parts", java.util.List.of(Map.of("text", "thinking...", "thought", true), Map.of("text", LESSON)))))));

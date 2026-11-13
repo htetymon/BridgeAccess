@@ -6,16 +6,15 @@ import org.springframework.stereotype.Component;
 
 import com.eduaccess.bridgeaccess.repository.GenerationRepository;
 import com.eduaccess.bridgeaccess.repository.GenerationRepository.PackageSource;
-import com.eduaccess.bridgeaccess.service.GeminiService;
 import com.eduaccess.bridgeaccess.service.GeminiService.LessonSource;
 import com.eduaccess.bridgeaccess.service.GeneratedLesson;
 import com.eduaccess.bridgeaccess.service.source.SourceTextResolver;
 
 /**
  * Runs the steps built so far: source text (pasted or read from the link), then the Gemini
- * call. It logs what Gemini returned and then fails the package with the generic, retryable
- * message, because validation (FR-6.4) and saving/publishing are not built yet. Replace
- * with the real generator once they are; it should keep these first two steps.
+ * lesson with validation and one retry. It logs the validated lesson and then fails the
+ * package with the generic, retryable message, because saving and publishing are not built
+ * yet. Replace with the real generator once they are; it should keep these steps.
  */
 @Component
 class PlaceholderPackageGenerator implements PackageGenerator {
@@ -26,13 +25,13 @@ class PlaceholderPackageGenerator implements PackageGenerator {
 
 	private final SourceTextResolver sourceTextResolver;
 
-	private final GeminiService geminiService;
+	private final LessonGenerator lessonGenerator;
 
 	PlaceholderPackageGenerator(GenerationRepository repository, SourceTextResolver sourceTextResolver,
-			GeminiService geminiService) {
+			LessonGenerator lessonGenerator) {
 		this.repository = repository;
 		this.sourceTextResolver = sourceTextResolver;
-		this.geminiService = geminiService;
+		this.lessonGenerator = lessonGenerator;
 	}
 
 	@Override
@@ -40,16 +39,12 @@ class PlaceholderPackageGenerator implements PackageGenerator {
 		PackageSource source = this.repository.findSource(claim.packageId())
 			.orElseThrow(() -> new IllegalStateException("Claimed package " + claim.packageId() + " not found"));
 		String text = this.sourceTextResolver.resolve(source);
-		GeneratedLesson lesson = this.geminiService.generateLesson(new LessonSource(source.originalTitle(),
+		GeneratedLesson lesson = this.lessonGenerator.generate(claim, new LessonSource(source.originalTitle(),
 				source.author(), source.resourceLink(), source.resourceType(), text));
-		log.info("Gemini lesson for package {}: title='{}', subject={}, {} takeaways, {} concepts, {} questions",
-				claim.packageId(), lesson.title(), lesson.subject(), size(lesson.keyTakeaways()),
-				size(lesson.keyConcepts()), size(lesson.quiz()));
-		throw new IllegalStateException("Validation and publishing not built yet");
-	}
-
-	private static int size(java.util.List<?> list) {
-		return list == null ? 0 : list.size();
+		log.info("Valid lesson for package {}: title='{}', subject={}, {} takeaways, {} concepts, {} questions",
+				claim.packageId(), lesson.title(), lesson.subject(), lesson.keyTakeaways().size(),
+				lesson.keyConcepts().size(), lesson.quiz().size());
+		throw new IllegalStateException("Publishing not built yet");
 	}
 
 }

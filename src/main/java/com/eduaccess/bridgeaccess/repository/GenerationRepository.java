@@ -59,6 +59,16 @@ public class GenerationRepository {
 		return rows.stream().findFirst().map(OffsetDateTime::toInstant);
 	}
 
+	/** Counts one AI attempt ({@code attempt_count}) while the claim is still current. */
+	public boolean recordAttempt(UUID packageId, Instant claimedAt) {
+		String sql = """
+				update app.learning_packages
+				   set attempt_count = attempt_count + 1
+				 where id = :id and status = 'processing' and processing_started_at = :claimedAt""";
+		return this.jdbc.update(sql, new MapSqlParameterSource("id", packageId).addValue("claimedAt",
+				OffsetDateTime.ofInstant(claimedAt, ZoneOffset.UTC))) == 1;
+	}
+
 	/**
 	 * Marks a claimed package failed. Does nothing if the claim is no longer current (the job
 	 * timed out and the package was retried, published or deleted meanwhile).

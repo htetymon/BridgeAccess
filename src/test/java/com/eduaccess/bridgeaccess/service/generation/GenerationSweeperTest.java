@@ -24,7 +24,7 @@ class GenerationSweeperTest {
 	private final GenerationDispatcher dispatcher = mock();
 
 	private final GenerationProperties properties = new GenerationProperties(2, 50, Duration.ofMinutes(5),
-			Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(30));
+			Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ZERO);
 
 	private final GenerationSweeper sweeper = new GenerationSweeper(this.repository, this.dispatcher, this.properties);
 

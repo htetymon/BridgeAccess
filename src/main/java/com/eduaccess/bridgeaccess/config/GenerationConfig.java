@@ -38,11 +38,13 @@ public class GenerationConfig {
 	 * re-queues it, so it does not race the request (or instance) that just submitted it
 	 * @param shutdownWait how long shutdown waits for running jobs; unfinished ones are failed
 	 * by the timeout, unstarted ones are re-queued after restart
+	 * @param retryDelay wait before the one retry when Gemini was busy or unreachable (FR-6.4)
 	 */
 	@ConfigurationProperties("bridgeaccess.generation")
 	public record GenerationProperties(@DefaultValue("2") int workers, @DefaultValue("50") int queueCapacity,
 			@DefaultValue("5m") Duration timeout, @DefaultValue("30s") Duration sweepInterval,
-			@DefaultValue("30s") Duration requeueGrace, @DefaultValue("30s") Duration shutdownWait) {
+			@DefaultValue("30s") Duration requeueGrace, @DefaultValue("30s") Duration shutdownWait,
+			@DefaultValue("3s") Duration retryDelay) {
 
 		public GenerationProperties {
 			if (workers < 1) {

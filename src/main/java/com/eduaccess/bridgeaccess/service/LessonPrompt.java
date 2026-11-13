@@ -78,6 +78,17 @@ public final class LessonPrompt {
 	}
 
 	/**
+	 * Added after the source on the retry (FR-6.4), so the model fixes what the validator
+	 * found instead of guessing. The problems are the validator's own wording.
+	 */
+	public static String correction(List<String> problems) {
+		StringBuilder text = new StringBuilder("Your previous lesson for this source was rejected because:\n");
+		problems.forEach(problem -> text.append("- ").append(oneLine(problem)).append('\n'));
+		text.append("Write the whole lesson again from the source, fixing these problems and following every rule.");
+		return text.toString();
+	}
+
+	/**
 	 * JSON Schema for {@code responseJsonSchema}. Counts, enum and the answer index range are
 	 * enforced by the API; word counts and string lengths are not and are checked afterwards.
 	 */
