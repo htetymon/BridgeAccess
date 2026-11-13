@@ -77,7 +77,8 @@ public class GenerationRepository {
 
 	/**
 	 * Points an image row at its optimised file, only while the claim is current, so a job
-	 * that outlived its timeout cannot change a package it no longer owns.
+	 * that outlived its timeout cannot change a package it no longer owns. Also refuses once the
+	 * contributor deleted the package, so no new file is left behind after its folder was emptied.
 	 */
 	public boolean replaceImage(UUID packageId, Instant claimedAt, UUID imageId, String storagePath, String mimeType,
 			int sizeBytes) {
@@ -86,7 +87,8 @@ public class GenerationRepository {
 				   set storage_path = :storagePath, mime_type = :mimeType, size_bytes = :sizeBytes
 				 where id = :imageId and package_id = :packageId
 				   and exists (select 1 from app.learning_packages
-				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt)""";
+				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt
+				                  and deleted_at is null)""";
 		return this.jdbc.update(sql, claimParams(packageId, claimedAt).addValue("imageId", imageId)
 			.addValue("storagePath", storagePath)
 			.addValue("mimeType", mimeType)
@@ -99,7 +101,8 @@ public class GenerationRepository {
 				delete from app.package_images
 				 where id = :imageId and package_id = :packageId
 				   and exists (select 1 from app.learning_packages
-				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt)""";
+				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt
+				                  and deleted_at is null)""";
 		return this.jdbc.update(sql, claimParams(packageId, claimedAt).addValue("imageId", imageId)) == 1;
 	}
 
@@ -108,12 +111,28 @@ public class GenerationRepository {
 				OffsetDateTime.ofInstant(claimedAt, ZoneOffset.UTC));
 	}
 
+	/**
+	 * Puts a claimed package back to waiting (unclaimed), for a later attempt when Gemini was
+	 * busy. Only while the claim is current, the package is not deleted, and it was created
+	 * less than {@code window} ago.
+	 */
+	public boolean release(UUID packageId, Instant claimedAt, Duration window) {
+		String sql = """
+				update app.learning_packages
+				   set processing_started_at = null
+				 where id = :packageId and status = 'processing' and processing_started_at = :claimedAt
+				   and deleted_at is null
+				   and created_at > now() - make_interval(secs => :windowSeconds)""";
+		return this.jdbc.update(sql,
+				claimParams(packageId, claimedAt).addValue("windowSeconds", window.toMillis() / 1000.0)) == 1;
+	}
+
 	/** Counts one AI attempt ({@code attempt_count}) while the claim is still current. */
 	public boolean recordAttempt(UUID packageId, Instant claimedAt) {
 		String sql = """
 				update app.learning_packages
 				   set attempt_count = attempt_count + 1
-				 where id = :id and status = 'processing' and processing_started_at = :claimedAt""";
+				 where id = :id and status = 'processing' and processing_started_at = :claimedAt and deleted_at is null""";
 		return this.jdbc.update(sql, new MapSqlParameterSource("id", packageId).addValue("claimedAt",
 				OffsetDateTime.ofInstant(claimedAt, ZoneOffset.UTC))) == 1;
 	}

@@ -97,6 +97,38 @@ class SupabaseImageStoreTest {
 	}
 
 	@Test
+	void deletesEveryFileInAFolder() {
+		this.server.expect(requestTo("https://proj.supabase.co/storage/v1/object/list/package-images"))
+			.andExpect(method(HttpMethod.POST))
+			.andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath("$.prefix").value("p1/"))
+			.andRespond(withSuccess("""
+					[{"name":"original-1.png","id":"a"},{"name":"i1.webp","id":"b"},{"name":"sub","id":null}]""",
+					MediaType.APPLICATION_JSON));
+		this.server.expect(requestTo("https://proj.supabase.co/storage/v1/object/package-images"))
+			.andExpect(method(HttpMethod.DELETE))
+			.andExpect(content().json("{\"prefixes\":[\"p1/original-1.png\",\"p1/i1.webp\"]}"))
+			.andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+		assertThat(this.store.deleteFolder("p1")).isEqualTo(2);
+		this.server.verify();
+	}
+
+	@Test
+	void emptyFolderDeletesNothing() {
+		this.server.expect(requestTo("https://proj.supabase.co/storage/v1/object/list/package-images"))
+			.andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+		assertThat(this.store.deleteFolder("p1")).isZero();
+		this.server.verify();
+	}
+
+	@Test
+	void folderMustBeARealFolder() {
+		assertThatThrownBy(() -> this.store.deleteFolder("")).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> this.store.deleteFolder("..")).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
 	void refusesPathTricks() {
 		assertThatThrownBy(() -> this.store.get("p1/../other/x.webp")).isInstanceOf(IllegalArgumentException.class);
 		assertThatThrownBy(() -> this.store.get("/p1/x.webp")).isInstanceOf(IllegalArgumentException.class);

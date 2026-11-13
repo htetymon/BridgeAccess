@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
+import com.eduaccess.bridgeaccess.config.GenerationConfig.GenerationProperties;
 import com.eduaccess.bridgeaccess.repository.GenerationRepository;
 import com.eduaccess.bridgeaccess.service.generation.PackageGenerator.Claim;
 
@@ -28,7 +30,11 @@ class GenerationJobTest {
 
 	private final PackageGenerator generator = mock();
 
-	private final GenerationJob job = new GenerationJob(this.repository, this.generator);
+	private static final Duration WINDOW = Duration.ofMinutes(30);
+
+	private final GenerationJob job = new GenerationJob(this.repository, this.generator,
+			new GenerationProperties(2, 50, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(30),
+					Duration.ofSeconds(30), Duration.ZERO, WINDOW));
 
 	@Test
 	void generatesClaimedPackage() {
@@ -87,6 +93,41 @@ class GenerationJobTest {
 			.willThrow(new DataAccessResourceFailureException("db down"));
 
 		this.job.run(ID); // does not throw; the timeout fails it later
+	}
+
+
+	@Test
+	void busyGeminiPutsThePackageBackInTheQueue() {
+		given(this.repository.claim(ID)).willReturn(Optional.of(CLAIMED));
+		willThrow(new GenerationDeferredException(new RuntimeException("503"))).given(this.generator).generate(any());
+		given(this.repository.release(ID, CLAIMED, WINDOW)).willReturn(true);
+
+		this.job.run(ID);
+
+		verify(this.repository).release(ID, CLAIMED, WINDOW);
+		verify(this.repository, never()).markFailed(any(), any(), any());
+	}
+
+	@Test
+	void busyGeminiPastTheWindowFailsThePackage() {
+		given(this.repository.claim(ID)).willReturn(Optional.of(CLAIMED));
+		willThrow(new GenerationDeferredException(new RuntimeException("503"))).given(this.generator).generate(any());
+		given(this.repository.release(ID, CLAIMED, WINDOW)).willReturn(false);
+
+		this.job.run(ID);
+
+		verify(this.repository).markFailed(ID, CLAIMED, GenerationFailedException.UNRELIABLE_OUTPUT);
+	}
+
+	@Test
+	void failingToRequeueFallsBackToFailing() {
+		given(this.repository.claim(ID)).willReturn(Optional.of(CLAIMED));
+		willThrow(new GenerationDeferredException(new RuntimeException("503"))).given(this.generator).generate(any());
+		given(this.repository.release(ID, CLAIMED, WINDOW)).willThrow(new DataAccessResourceFailureException("down"));
+
+		this.job.run(ID);
+
+		verify(this.repository).markFailed(ID, CLAIMED, GenerationFailedException.UNRELIABLE_OUTPUT);
 	}
 
 }

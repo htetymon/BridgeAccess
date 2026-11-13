@@ -18,6 +18,9 @@ import com.eduaccess.bridgeaccess.service.generation.LessonValidator.Validation;
 
 class LessonValidatorTest {
 
+	/** 120 words, inside the 80 to 180 the validator accepts. */
+	static final String SUMMARY = String.join(" ", java.util.Collections.nCopies(24, "Clean energy refills itself naturally."));
+
 	private final LessonValidator validator = new LessonValidator();
 
 	static GeneratedLesson valid() {
@@ -27,7 +30,7 @@ class LessonValidatorTest {
 					"Because the source says so."));
 		}
 		return new GeneratedLesson("Clean Energy Basics", "Science", "You will learn about clean energy.",
-				List.of("One.", "Two.", "Three."), "Renewable energy refills naturally.",
+				List.of("One.", "Two.", "Three."), SUMMARY,
 				List.of(new KeyConcept("Solar", "Sunlight."), new KeyConcept("Wind", "Moving air."),
 						new KeyConcept("Hydro", "Flowing water."), new KeyConcept("Geothermal", "Earth heat.")),
 				quiz);
@@ -129,6 +132,24 @@ class LessonValidatorTest {
 	}
 
 	@Test
+	void summaryLengthAllowsSomeSlackButNotOneLinersOrEssays() {
+		assertThat(summaryProblems(words(80))).isEmpty();
+		assertThat(summaryProblems(words(180))).isEmpty();
+		assertThat(summaryProblems(words(79))).containsExactly("summary is 79 words; write 100 to 150 words");
+		assertThat(summaryProblems(words(181))).containsExactly("summary is 181 words; write 100 to 150 words");
+		assertThat(summaryProblems("Renewable energy refills naturally.")).hasSize(1);
+	}
+
+	@Test
+	void summaryLengthIsNotCountedForScriptsWithoutSpaces() {
+		// Burmese/Thai-style text: long runs with no spaces between words.
+		String burmese = "ပြန်လည်ပြည့်ဖြိုးမြဲစွမ်းအင်သည်နေရောင်ခြည်လေနှင့်ရေမှလာသည်".repeat(4) + " "
+				+ "ကမ္ဘာကိုသန့်ရှင်းစေသည်".repeat(4);
+
+		assertThat(summaryProblems(burmese)).isEmpty();
+	}
+
+	@Test
 	void rejectsOverlongTitle() {
 		GeneratedLesson raw = valid();
 
@@ -159,6 +180,16 @@ class LessonValidatorTest {
 	@Test
 	void nullLesson() {
 		assertThat(this.validator.validate(null).isValid()).isFalse();
+	}
+
+	private static List<String> summaryProblems(String summary) {
+		List<String> problems = new ArrayList<>();
+		LessonValidator.checkSummaryLength(summary, problems);
+		return problems;
+	}
+
+	private static String words(int count) {
+		return String.join(" ", java.util.Collections.nCopies(count, "word"));
 	}
 
 	private void assertProblem(GeneratedLesson lesson, String expected) {

@@ -64,6 +64,30 @@ public class LocalImageStore implements ImageStore {
 		}
 	}
 
+	@Override
+	public int deleteFolder(String folder) {
+		Path dir = resolve(folder);
+		if (!Files.isDirectory(dir)) {
+			return 0;
+		}
+		int deleted = 0;
+		try (var files = Files.list(dir)) {
+			for (Path file : (Iterable<Path>) files::iterator) {
+				if (Files.isRegularFile(file) && Files.deleteIfExists(file)) {
+					deleted++;
+				}
+			}
+			Files.deleteIfExists(dir); // only succeeds when empty
+			return deleted;
+		}
+		catch (java.nio.file.DirectoryNotEmptyException ex) {
+			return deleted;
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException("Could not delete folder " + folder, ex);
+		}
+	}
+
 	/** Paths are built by the server, but refuse anything that would escape the root anyway. */
 	private Path resolve(String path) {
 		Path resolved = this.root.resolve(path).normalize();

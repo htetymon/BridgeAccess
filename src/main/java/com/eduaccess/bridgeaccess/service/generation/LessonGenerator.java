@@ -27,7 +27,8 @@ import com.eduaccess.bridgeaccess.service.generation.PackageGenerator.Claim;
  * <li>the lesson failed validation: the retry tells the model what was wrong;</li>
  * <li>the answer was cut off or not the lesson JSON ({@code INVALID_OUTPUT});</li>
  * <li>Gemini was busy or unreachable ({@code UNAVAILABLE}): the retry waits
- * {@code retryDelay} first.</li>
+ * {@code retryDelay} first. If the last attempt is busy too, nothing is wrong with the
+ * package: {@link GenerationDeferredException} tells the job to queue it again for later.</li>
  * </ul>
  * Not retried, because a second identical call would fail the same way: a missing or
  * rejected key or unknown model ({@code MISCONFIGURED}, logged as an error for the operator)
@@ -65,9 +66,10 @@ public class LessonGenerator {
 		String correction = null;
 		for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 			boolean last = attempt == MAX_ATTEMPTS;
-			countAttempt(claim);
 			try {
-				Validation validation = this.validator.validate(this.geminiService.generateLesson(source, correction));
+				GeneratedLesson raw = this.geminiService.generateLesson(source, correction);
+				countAttempt(claim);
+				Validation validation = this.validator.validate(raw);
 				if (validation.isValid()) {
 					if (attempt > 1) {
 						log.info("Lesson for package {} passed validation on attempt {}", claim.packageId(), attempt);
@@ -86,17 +88,25 @@ public class LessonGenerator {
 						throw unreliable(ex);
 					}
 					case BLOCKED -> {
+						countAttempt(claim);
 						log.warn("Gemini blocked the lesson for package {}: {}", claim.packageId(), ex.getMessage());
 						throw unreliable(ex);
 					}
-					case UNAVAILABLE, INVALID_OUTPUT -> {
+					case UNAVAILABLE -> {
+						log.warn("Gemini busy on attempt {}/{} for package {}: {}", attempt, MAX_ATTEMPTS,
+								claim.packageId(), ex.getMessage());
+						if (last) {
+							throw new GenerationDeferredException(ex);
+						}
+						pause();
+						// Keep any correction: the previous problems still need fixing.
+					}
+					case INVALID_OUTPUT -> {
+						countAttempt(claim);
 						log.warn("Gemini attempt {}/{} for package {} failed: {}", attempt, MAX_ATTEMPTS,
 								claim.packageId(), ex.getMessage());
 						if (last) {
 							throw unreliable(ex);
-						}
-						if (ex.kind() == GeminiException.Kind.UNAVAILABLE) {
-							pause();
 						}
 						// A malformed answer says nothing useful to correct; ask again plainly.
 						correction = null;
@@ -107,7 +117,11 @@ public class LessonGenerator {
 		throw new GenerationFailedException(GenerationFailedException.UNRELIABLE_OUTPUT);
 	}
 
-	/** Bookkeeping only ({@code attempt_count}); a failed write must not cost the lesson. */
+	/**
+	 * Counts a Gemini call that produced an answer (billed), for the retry budget. Busy or
+	 * rejected calls are not counted, so an outage cannot use up a contributor's retries.
+	 * Bookkeeping only: a failed write must not cost the lesson.
+	 */
 	private void countAttempt(Claim claim) {
 		try {
 			this.repository.recordAttempt(claim.packageId(), claim.claimedAt());
@@ -125,9 +139,9 @@ public class LessonGenerator {
 			Thread.sleep(this.retryDelay);
 		}
 		catch (InterruptedException ex) {
-			// Shutting down: stop here; the package is failed with the usual "try again" text.
+			// Shutting down: hand the package back to the queue for another instance or restart.
 			Thread.currentThread().interrupt();
-			throw new GenerationFailedException(GenerationFailedException.UNRELIABLE_OUTPUT, ex);
+			throw new GenerationDeferredException(ex);
 		}
 	}
 

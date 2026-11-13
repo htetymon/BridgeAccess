@@ -39,12 +39,14 @@ public class GenerationConfig {
 	 * @param shutdownWait how long shutdown waits for running jobs; unfinished ones are failed
 	 * by the timeout, unstarted ones are re-queued after restart
 	 * @param retryDelay wait before the one retry when Gemini was busy or unreachable (FR-6.4)
+	 * @param deferWindow while a package is younger than this, a run that ends with Gemini busy
+	 * puts it back in the queue instead of failing it
 	 */
 	@ConfigurationProperties("bridgeaccess.generation")
 	public record GenerationProperties(@DefaultValue("2") int workers, @DefaultValue("50") int queueCapacity,
 			@DefaultValue("5m") Duration timeout, @DefaultValue("30s") Duration sweepInterval,
 			@DefaultValue("30s") Duration requeueGrace, @DefaultValue("30s") Duration shutdownWait,
-			@DefaultValue("3s") Duration retryDelay) {
+			@DefaultValue("3s") Duration retryDelay, @DefaultValue("30m") Duration deferWindow) {
 
 		public GenerationProperties {
 			if (workers < 1) {

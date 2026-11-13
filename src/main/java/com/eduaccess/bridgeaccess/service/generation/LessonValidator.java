@@ -16,8 +16,9 @@ import com.eduaccess.bridgeaccess.service.LessonPrompt;
 
 /**
  * Checks Gemini's lesson before it can be published (FR-6.4): exactly 5 questions, 4
- * different non-empty options each, an answer index from 0 to 3, an allowed subject, and
- * every field the database requires to be present and within its counts.
+ * different non-empty options each, an answer index from 0 to 3, an allowed subject, a
+ * summary of roughly the asked length, and every field the database requires to be
+ * present and within its counts.
  *
  * <p>
  * The response schema already asks the API to enforce counts, the enum and the index range,
@@ -37,6 +38,13 @@ public class LessonValidator {
 
 	/** The prompt asks for 80; a little over is harmless, a paragraph is not a title. */
 	static final int MAX_TITLE_CHARS = 100;
+
+	static final int MIN_SUMMARY_WORDS = 80;
+
+	static final int MAX_SUMMARY_WORDS = 180;
+
+	/** Longer "words" on average mean the script does not separate words with spaces. */
+	static final double MAX_AVERAGE_WORD_CHARS = 15;
 
 	/** Longest model text quoted back in a problem, so the retry prompt stays small. */
 	private static final int QUOTE_CHARS = 40;
@@ -72,6 +80,7 @@ public class LessonValidator {
 
 		String overview = requireText(raw.overview(), "overview", problems);
 		String summary = requireText(raw.summary(), "summary", problems);
+		checkSummaryLength(summary, problems);
 		List<String> takeaways = takeaways(raw.keyTakeaways(), problems);
 		List<KeyConcept> concepts = concepts(raw.keyConcepts(), problems);
 		List<QuizQuestion> quiz = quiz(raw.quiz(), problems);
@@ -79,6 +88,30 @@ public class LessonValidator {
 		GeneratedLesson clean = new GeneratedLesson(title, subject.orElse(raw.subject()), overview, takeaways,
 				summary, concepts, quiz);
 		return new Validation(clean, List.copyOf(problems));
+	}
+
+	/**
+	 * The prompt asks for 100 to 150 words; 80 to 180 passes, so a good lesson is not thrown
+	 * away over a few words, while a one-liner or an essay is. Skipped for text written
+	 * without spaces between words (Thai, Burmese, Chinese...), where splitting on spaces
+	 * cannot count words.
+	 */
+	static void checkSummaryLength(String summary, List<String> problems) {
+		if (summary.isEmpty()) {
+			return; // already reported as empty
+		}
+		int words = wordCount(summary);
+		if (words < MIN_SUMMARY_WORDS && (double) summary.length() / words > MAX_AVERAGE_WORD_CHARS) {
+			return;
+		}
+		if (words < MIN_SUMMARY_WORDS || words > MAX_SUMMARY_WORDS) {
+			problems.add("summary is " + words + " words; write 100 to 150 words");
+		}
+	}
+
+	static int wordCount(String text) {
+		String trimmed = text.strip();
+		return trimmed.isEmpty() ? 0 : trimmed.split("\\s+").length;
 	}
 
 	/** Case and spaces are forgiven ("science " is Science); anything else is not. */

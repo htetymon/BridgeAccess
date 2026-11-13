@@ -85,7 +85,7 @@ class ContributionControllerTest {
 
 		@Bean
 		ContributionProperties contributionProperties() {
-			return new ContributionProperties(5);
+			return new ContributionProperties(5, 6);
 		}
 
 	}

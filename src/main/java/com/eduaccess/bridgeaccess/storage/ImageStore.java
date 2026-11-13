@@ -24,6 +24,15 @@ public interface ImageStore {
 	/** Deletes the file if it exists. Never throws for a missing file. */
 	void delete(String path);
 
+	/**
+	 * Deletes every file directly under {@code folder} (for example a package's
+	 * {@code {packageId}} folder), including files no database row points at. Never throws for
+	 * a missing or empty folder.
+	 *
+	 * @return how many files were deleted
+	 */
+	int deleteFolder(String folder);
+
 	class ImageNotFoundException extends RuntimeException {
 
 		public ImageNotFoundException(String path) {

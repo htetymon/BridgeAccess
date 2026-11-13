@@ -35,6 +35,21 @@ class LocalImageStoreTest {
 	}
 
 	@Test
+	void deletesAFolderAndOnlyThatFolder() throws Exception {
+		LocalImageStore store = new LocalImageStore(this.root);
+		store.put("p1/original-1.png", new byte[] { 1 }, "image/png");
+		store.put("p1/i1.webp", new byte[] { 2 }, "image/webp");
+		store.put("p2/i2.webp", new byte[] { 3 }, "image/webp");
+
+		assertThat(store.deleteFolder("p1")).isEqualTo(2);
+
+		assertThat(this.root.resolve("p1")).doesNotExist();
+		assertThat(this.root.resolve("p2/i2.webp")).exists();
+		assertThat(store.deleteFolder("p1")).isZero(); // missing folder is fine
+		assertThatThrownBy(() -> store.deleteFolder("..")).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
 	void refusesPathsOutsideRoot() {
 		LocalImageStore store = new LocalImageStore(this.root.resolve("images"));
 		assertThatThrownBy(() -> store.put("../escape.png", new byte[] { 1 }, "image/png"))

@@ -44,7 +44,7 @@ class LessonGeneratorTest {
 
 	private final LessonGenerator generator = new LessonGenerator(this.gemini, new LessonValidator(), this.repository,
 			new GenerationProperties(2, 50, Duration.ofMinutes(5), Duration.ofSeconds(30), Duration.ofSeconds(30),
-					Duration.ofSeconds(30), Duration.ZERO));
+					Duration.ofSeconds(30), Duration.ZERO, Duration.ofMinutes(30)));
 
 	@Test
 	void returnsAValidLessonFromTheFirstAttempt() {
@@ -84,14 +84,45 @@ class LessonGeneratorTest {
 		verify(this.gemini, times(2)).generateLesson(SOURCE, null);
 	}
 
-	@ParameterizedTest
-	@EnumSource(names = { "INVALID_OUTPUT", "UNAVAILABLE" })
-	void failsAfterTwoTransientGeminiFailures(Kind kind) {
-		given(this.gemini.generateLesson(SOURCE, null)).willThrow(new GeminiException(kind, "first"),
-				new GeminiException(kind, "second"));
+	@Test
+	void failsAfterTwoMalformedAnswers() {
+		given(this.gemini.generateLesson(SOURCE, null)).willThrow(new GeminiException(Kind.INVALID_OUTPUT, "first"),
+				new GeminiException(Kind.INVALID_OUTPUT, "second"));
 
 		assertUnreliable();
 		verify(this.gemini, times(2)).generateLesson(SOURCE, null);
+		verify(this.repository, times(2)).recordAttempt(CLAIM.packageId(), CLAIM.claimedAt());
+	}
+
+	@Test
+	void busyTwiceDefersInsteadOfFailingAndUsesNoBudget() {
+		given(this.gemini.generateLesson(SOURCE, null)).willThrow(new GeminiException(Kind.UNAVAILABLE, "503"),
+				new GeminiException(Kind.UNAVAILABLE, "503"));
+
+		assertThatThrownBy(() -> this.generator.generate(CLAIM, SOURCE))
+			.isInstanceOf(GenerationDeferredException.class)
+			.hasMessage(GenerationFailedException.UNRELIABLE_OUTPUT);
+		verify(this.gemini, times(2)).generateLesson(SOURCE, null);
+		verify(this.repository, org.mockito.Mockito.never()).recordAttempt(any(), any());
+	}
+
+	@Test
+	void invalidLessonThenBusyDefersToo() {
+		given(this.gemini.generateLesson(SOURCE, null)).willReturn(badSubject());
+		given(this.gemini.generateLesson(eq(SOURCE), argThat(c -> c != null)))
+			.willThrow(new GeminiException(Kind.UNAVAILABLE, "503"));
+
+		assertThatThrownBy(() -> this.generator.generate(CLAIM, SOURCE)).isInstanceOf(GenerationDeferredException.class);
+		verify(this.repository, times(1)).recordAttempt(CLAIM.packageId(), CLAIM.claimedAt());
+	}
+
+	@Test
+	void busyThenInvalidLessonKeepsNoStaleCorrection() {
+		given(this.gemini.generateLesson(SOURCE, null)).willThrow(new GeminiException(Kind.UNAVAILABLE, "503"))
+			.willReturn(LessonValidatorTest.valid());
+
+		assertThat(this.generator.generate(CLAIM, SOURCE)).isEqualTo(LessonValidatorTest.valid());
+		verify(this.repository, times(1)).recordAttempt(CLAIM.packageId(), CLAIM.claimedAt());
 	}
 
 	@ParameterizedTest
