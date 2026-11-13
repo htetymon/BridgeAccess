@@ -12,7 +12,7 @@ import com.eduaccess.bridgeaccess.service.source.SourceTextResolver;
 
 /**
  * Runs the steps built so far: source text (pasted or read from the link), then the Gemini
- * lesson with validation and one retry. It logs the validated lesson and then fails the
+ * lesson with validation and one retry, then image optimisation. It logs the lesson and fails the
  * package with the generic, retryable message, because saving and publishing are not built
  * yet. Replace with the real generator once they are; it should keep these steps.
  */
@@ -27,11 +27,14 @@ class PlaceholderPackageGenerator implements PackageGenerator {
 
 	private final LessonGenerator lessonGenerator;
 
+	private final PackageImageProcessor imageProcessor;
+
 	PlaceholderPackageGenerator(GenerationRepository repository, SourceTextResolver sourceTextResolver,
-			LessonGenerator lessonGenerator) {
+			LessonGenerator lessonGenerator, PackageImageProcessor imageProcessor) {
 		this.repository = repository;
 		this.sourceTextResolver = sourceTextResolver;
 		this.lessonGenerator = lessonGenerator;
+		this.imageProcessor = imageProcessor;
 	}
 
 	@Override
@@ -44,6 +47,8 @@ class PlaceholderPackageGenerator implements PackageGenerator {
 		log.info("Valid lesson for package {}: title='{}', subject={}, {} takeaways, {} concepts, {} questions",
 				claim.packageId(), lesson.title(), lesson.subject(), lesson.keyTakeaways().size(),
 				lesson.keyConcepts().size(), lesson.quiz().size());
+		// After the lesson, so a package that fails validation costs no image work.
+		this.imageProcessor.process(claim);
 		throw new IllegalStateException("Publishing not built yet");
 	}
 

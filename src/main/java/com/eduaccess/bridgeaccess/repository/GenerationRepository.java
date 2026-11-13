@@ -59,6 +59,55 @@ public class GenerationRepository {
 		return rows.stream().findFirst().map(OffsetDateTime::toInstant);
 	}
 
+	/** One {@code package_images} row as stored. */
+	public record StoredImage(UUID id, String source, int position, String storagePath, String mimeType,
+			int sizeBytes) {
+	}
+
+	public List<StoredImage> findImages(UUID packageId) {
+		String sql = """
+				select id, source::text as source, position, storage_path, mime_type, size_bytes
+				  from app.package_images
+				 where package_id = :packageId
+				 order by position""";
+		return this.jdbc.query(sql, new MapSqlParameterSource("packageId", packageId),
+				(rs, i) -> new StoredImage(rs.getObject("id", UUID.class), rs.getString("source"), rs.getInt("position"),
+						rs.getString("storage_path"), rs.getString("mime_type"), rs.getInt("size_bytes")));
+	}
+
+	/**
+	 * Points an image row at its optimised file, only while the claim is current, so a job
+	 * that outlived its timeout cannot change a package it no longer owns.
+	 */
+	public boolean replaceImage(UUID packageId, Instant claimedAt, UUID imageId, String storagePath, String mimeType,
+			int sizeBytes) {
+		String sql = """
+				update app.package_images
+				   set storage_path = :storagePath, mime_type = :mimeType, size_bytes = :sizeBytes
+				 where id = :imageId and package_id = :packageId
+				   and exists (select 1 from app.learning_packages
+				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt)""";
+		return this.jdbc.update(sql, claimParams(packageId, claimedAt).addValue("imageId", imageId)
+			.addValue("storagePath", storagePath)
+			.addValue("mimeType", mimeType)
+			.addValue("sizeBytes", sizeBytes)) == 1;
+	}
+
+	/** Removes an image row that must not be published, while the claim is current. */
+	public boolean deleteImage(UUID packageId, Instant claimedAt, UUID imageId) {
+		String sql = """
+				delete from app.package_images
+				 where id = :imageId and package_id = :packageId
+				   and exists (select 1 from app.learning_packages
+				                where id = :packageId and status = 'processing' and processing_started_at = :claimedAt)""";
+		return this.jdbc.update(sql, claimParams(packageId, claimedAt).addValue("imageId", imageId)) == 1;
+	}
+
+	private static MapSqlParameterSource claimParams(UUID packageId, Instant claimedAt) {
+		return new MapSqlParameterSource("packageId", packageId).addValue("claimedAt",
+				OffsetDateTime.ofInstant(claimedAt, ZoneOffset.UTC));
+	}
+
 	/** Counts one AI attempt ({@code attempt_count}) while the claim is still current. */
 	public boolean recordAttempt(UUID packageId, Instant claimedAt) {
 		String sql = """

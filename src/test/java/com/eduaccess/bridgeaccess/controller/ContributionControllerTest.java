@@ -173,14 +173,14 @@ class ContributionControllerTest {
 			.andExpect(status().isAccepted());
 
 		UUID id = insertedRow().id();
-		verify(this.imageStore).put("packages/" + id + "/original-1.png", PNG, "image/png");
-		verify(this.imageStore).put("packages/" + id + "/original-2.jpg", JPEG, "image/jpeg");
+		verify(this.imageStore).put(id + "/original-1.png", PNG, "image/png");
+		verify(this.imageStore).put(id + "/original-2.jpg", JPEG, "image/jpeg");
 
 		ArgumentCaptor<NewImageRow> rows = ArgumentCaptor.forClass(NewImageRow.class);
 		verify(this.repository, times(2)).insertImage(rows.capture());
 		assertThat(rows.getAllValues()).containsExactly(
-				new NewImageRow(id, 1, "packages/" + id + "/original-1.png", "image/png", PNG.length, "Wind turbines"),
-				new NewImageRow(id, 2, "packages/" + id + "/original-2.jpg", "image/jpeg", JPEG.length, null));
+				new NewImageRow(id, 1, id + "/original-1.png", "image/png", PNG.length, "Wind turbines"),
+				new NewImageRow(id, 2, id + "/original-2.jpg", "image/jpeg", JPEG.length, null));
 	}
 
 	@Test

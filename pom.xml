@@ -66,6 +66,15 @@
 			<version>1.17.2</version>
 		</dependency>
 
+		<!-- Image optimisation (FR-6.5): ImageIO plugin around Google's libwebp. Bundles native
+		     builds for Linux (glibc) x64/arm64, macOS and Windows; where none loads (for
+		     example Alpine/musl) ImageOptimizer falls back to resized JPEG. -->
+		<dependency>
+			<groupId>com.github.usefulness</groupId>
+			<artifactId>webp-imageio</artifactId>
+			<version>0.11.0</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

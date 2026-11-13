@@ -97,7 +97,7 @@ public class ContributionService {
 		try {
 			List<NewImageRow> imageRows = new ArrayList<>();
 			for (NewImage image : pkg.images()) {
-				String path = "packages/" + id + "/original-" + image.position() + "." + image.type().extension();
+				String path = id + "/original-" + image.position() + "." + image.type().extension();
 				this.imageStore.put(path, image.bytes(), image.type().mimeType());
 				stored.add(path);
 				imageRows.add(new NewImageRow(id, image.position(), path, image.type().mimeType(),

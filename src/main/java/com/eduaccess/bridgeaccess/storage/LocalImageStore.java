@@ -3,23 +3,21 @@ package com.eduaccess.bridgeaccess.storage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
 /**
- * Development {@link ImageStore}: files under {@code bridgeaccess.storage.local-dir}.
+ * Development {@link ImageStore}: files under {@code bridgeaccess.storage.local-dir}, used
+ * when Supabase Storage is not configured (see {@code StorageConfig}).
  * Writes go to a temporary file first and are then moved into place, so a crash never leaves
  * a half-written image at the final path.
  */
-@Component
 public class LocalImageStore implements ImageStore {
 
 	private final Path root;
 
-	public LocalImageStore(@Value("${bridgeaccess.storage.local-dir:./data/images}") Path root) {
+	public LocalImageStore(Path root) {
 		this.root = root.toAbsolutePath().normalize();
 	}
 
@@ -39,6 +37,20 @@ public class LocalImageStore implements ImageStore {
 		}
 		catch (IOException ex) {
 			throw new UncheckedIOException("Could not store image " + path, ex);
+		}
+	}
+
+	@Override
+	public byte[] get(String path) {
+		Path file = resolve(path);
+		try {
+			return Files.readAllBytes(file);
+		}
+		catch (NoSuchFileException ex) {
+			throw new ImageNotFoundException(path);
+		}
+		catch (IOException ex) {
+			throw new UncheckedIOException("Could not read image " + path, ex);
 		}
 	}
 

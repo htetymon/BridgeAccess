@@ -25,8 +25,12 @@ class LocalImageStoreTest {
 			assertThat(leftovers).containsExactly(file); // no temp files left behind
 		}
 
+		assertThat(store.get("packages/p1/original-1.png")).containsExactly(1, 2, 3);
+
 		store.delete("packages/p1/original-1.png");
 		assertThat(file).doesNotExist();
+		assertThatThrownBy(() -> store.get("packages/p1/original-1.png"))
+			.isInstanceOf(ImageStore.ImageNotFoundException.class);
 		store.delete("packages/p1/original-1.png"); // missing file is fine
 	}
 
