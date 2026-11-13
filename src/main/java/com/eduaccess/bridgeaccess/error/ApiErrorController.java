@@ -26,7 +26,7 @@ public class ApiErrorController implements ErrorController {
 		if (request.getAttribute(RequestDispatcher.ERROR_EXCEPTION) instanceof ApiException ex) {
 			return ResponseEntity.status(ex.getCode().status())
 				.body(ApiErrorResponse.of(ex.getCode(), ex.getMessage(), ex.getDetails(),
-						RequestIdFilter.resolve(request)));
+						RequestIdFilter.resolve(request), ex.getExtras()));
 		}
 		int status = (request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE) instanceof Integer code) ? code
 				: 500;

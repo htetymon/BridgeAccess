@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.eduaccess.bridgeaccess.filter.RequestIdFilter;
@@ -43,7 +44,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		if (code.status().is5xxServerError()) {
 			log.error("API error {}", code, ex);
 		}
-		return body(code, ex.getMessage(), ex.getDetails(), request);
+		return ResponseEntity.status(code.status())
+			.body(ApiErrorResponse.of(code, ex.getMessage(), ex.getDetails(), requestId(request), ex.getExtras()));
 	}
 
 	@ExceptionHandler(ConstraintViolationException.class)
@@ -91,6 +93,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 			}
 		});
 		return handleExceptionInternal(ex, validationBody(details, request), headers, status, request);
+	}
+
+	/**
+	 * A multipart part or request over the servlet limits. Only image parts can be that large
+	 * (the JSON part is a few KB), so report it as the contract's IMAGE_TOO_LARGE.
+	 */
+	@Override
+	protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+			HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+		ApiErrorResponse body = ApiErrorResponse.of(ErrorCode.IMAGE_TOO_LARGE, requestId(request));
+		return handleExceptionInternal(ex, body, headers, ErrorCode.IMAGE_TOO_LARGE.status(), request);
 	}
 
 	/**
