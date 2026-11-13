@@ -1138,3 +1138,36 @@ button {
     display: none;
   }
 }
+
+/* Inline validation details (FR-5.5). */
+.field__count--near {
+  color: #a15c00;
+  font-weight: 600;
+}
+
+.field__count--over {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.field__suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-contribute-soft);
+  font-size: 0.875rem;
+}
+
+.field__suggest-action {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

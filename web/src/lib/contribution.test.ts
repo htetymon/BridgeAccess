@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ApiError } from './api/client'
 import {
   clearDraft,
+  contentCounter,
   describeCreateError,
   EMPTY_DRAFT,
   imageProblem,
+  isYouTubeLink,
   loadDraft,
+  normalizeLink,
   pollDelay,
   POLL_GIVE_UP_MS,
   saveDraft,
   toNewPackage,
   validateDraft,
+  validateField,
+  youTubeVideoId,
   type Draft,
 } from './contribution'
 
@@ -27,24 +32,36 @@ describe('validateDraft', () => {
     expect(validateDraft(valid)).toEqual({})
   })
 
-  it('requires title, author and link, ignoring spaces', () => {
+  it('requires title, author and link, ignoring spaces, in the words of each form', () => {
     expect(validateDraft({ ...valid, originalTitle: '  ', author: '', resourceLink: ' ' })).toEqual({
-      originalTitle: 'This field is required.',
-      author: 'This field is required.',
-      resourceLink: 'This field is required.',
+      originalTitle: 'Enter the original title.',
+      author: 'Enter the author.',
+      resourceLink: 'Enter the link to the resource.',
+    })
+    expect(
+      validateDraft({ ...valid, resourceType: 'video', originalTitle: '', author: '', resourceLink: '' }),
+    ).toEqual({
+      originalTitle: 'Enter the video title.',
+      author: 'Enter the channel name.',
+      resourceLink: 'Enter the YouTube video link.',
     })
   })
 
-  it('checks lengths with the server limits', () => {
+  it('content is optional', () => {
+    expect(validateField('content', { ...valid, content: '' })).toBeUndefined()
+  })
+
+  it('checks lengths with the server limits and says how much to remove', () => {
     const errors = validateDraft({
       ...valid,
       originalTitle: 'x'.repeat(301),
       author: 'y'.repeat(201),
-      content: 'z'.repeat(10_001),
+      content: 'z'.repeat(10_523),
     })
     expect(errors.originalTitle).toBe('Use at most 300 characters.')
     expect(errors.author).toBe('Use at most 200 characters.')
-    expect(errors.content).toBe('Use at most 10,000 characters.')
+    expect(errors.content).toBe('Use at most 10,000 characters. Remove 523.')
+    expect(validateField('content', { ...valid, content: 'z'.repeat(10_000) })).toBeUndefined()
   })
 
   it('needs an http(s) link', () => {
@@ -52,13 +69,96 @@ describe('validateDraft', () => {
     expect(validateDraft({ ...valid, resourceLink: 'ftp://example.org' }).resourceLink).toMatch(/http/)
   })
 
-  it('needs a YouTube link for a video', () => {
+  it('needs a YouTube video link for a video', () => {
     const video = { ...valid, resourceType: 'video' as const }
     expect(validateDraft(video).resourceLink).toBe('Enter a YouTube link (youtube.com or youtu.be).')
-    expect(validateDraft({ ...video, resourceLink: 'https://www.youtube.com/watch?v=abc' })).toEqual({})
-    expect(validateDraft({ ...video, resourceLink: 'https://youtu.be/abc' })).toEqual({})
-    expect(validateDraft({ ...video, resourceLink: 'https://m.youtube.com/watch?v=abc' })).toEqual({})
-    expect(validateDraft({ ...video, resourceLink: 'https://notyoutube.com/x' }).resourceLink).toBeDefined()
+    expect(validateDraft({ ...video, resourceLink: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' })).toEqual({})
+    expect(validateDraft({ ...video, resourceLink: 'https://notyoutube.com/x' }).resourceLink).toMatch(/YouTube link/)
+    expect(validateDraft({ ...video, resourceLink: 'https://www.youtube.com/@channel' }).resourceLink).toBe(
+      "This YouTube link isn't a video. Open the video and copy its link.",
+    )
+  })
+
+  it('a text resource may use any web link, YouTube included', () => {
+    expect(validateDraft({ ...valid, resourceLink: 'https://youtu.be/dQw4w9WgXcQ' })).toEqual({})
+  })
+})
+
+describe('youTubeVideoId', () => {
+  const id = 'dQw4w9WgXcQ'
+
+  it.each([
+    `https://www.youtube.com/watch?v=${id}`,
+    `https://youtube.com/watch?feature=share&v=${id}&t=42`,
+    `https://m.youtube.com/watch?v=${id}`,
+    `https://music.youtube.com/watch?v=${id}`,
+    `http://youtu.be/${id}`,
+    `https://youtu.be/${id}?si=abc`,
+    `https://www.youtube.com/shorts/${id}`,
+    `https://www.youtube.com/embed/${id}`,
+    `https://www.youtube.com/live/${id}`,
+    `  https://WWW.YOUTUBE.COM/watch?v=${id}  `,
+  ])('finds the video in %s', (link) => {
+    expect(youTubeVideoId(link)).toBe(id)
+  })
+
+  it.each([
+    'https://www.youtube.com/',
+    'https://www.youtube.com/@SomeChannel',
+    'https://www.youtube.com/playlist?list=PL123',
+    'https://www.youtube.com/watch?v=short',
+    'https://youtu.be/',
+    `https://youtube.com.evil.example/watch?v=${id}`,
+    `https://notyoutube.com/watch?v=${id}`,
+    `ftp://youtube.com/watch?v=${id}`,
+    'not a url',
+  ])('finds no video in %s', (link) => {
+    expect(youTubeVideoId(link)).toBeNull()
+  })
+})
+
+describe('normalizeLink', () => {
+  it('adds https:// to bare addresses', () => {
+    expect(normalizeLink(' www.example.org/page ')).toBe('https://www.example.org/page')
+    expect(normalizeLink('example.org')).toBe('https://example.org')
+    expect(normalizeLink('youtu.be/dQw4w9WgXcQ')).toBe('https://youtu.be/dQw4w9WgXcQ')
+    expect(normalizeLink('//example.org/a')).toBe('https://example.org/a')
+  })
+
+  it('leaves links with a scheme, and non-links, for validation to explain', () => {
+    expect(normalizeLink('http://example.org')).toBe('http://example.org')
+    expect(normalizeLink('ftp://example.org')).toBe('ftp://example.org')
+    expect(normalizeLink('my notes')).toBe('my notes')
+    expect(normalizeLink('mailto:a@b.org')).toBe('mailto:a@b.org')
+    expect(normalizeLink('')).toBe('')
+  })
+})
+
+describe('isYouTubeLink', () => {
+  it('spots YouTube hosts only', () => {
+    expect(isYouTubeLink('https://www.youtube.com/watch?v=x')).toBe(true)
+    expect(isYouTubeLink('https://youtu.be/x')).toBe(true)
+    expect(isYouTubeLink('https://example.org/youtube.com/')).toBe(false)
+  })
+})
+
+describe('contentCounter', () => {
+  it('counts quietly far from the limit', () => {
+    expect(contentCounter(0)).toEqual({ text: '0/10,000', state: 'ok', announce: null })
+    expect(contentCounter(8_999).state).toBe('ok')
+  })
+
+  it('warns from 90 % and says how much is left', () => {
+    expect(contentCounter(9_000)).toEqual({ text: '9,000/10,000', state: 'near', announce: '1,000 characters left.' })
+    expect(contentCounter(10_000).state).toBe('near')
+  })
+
+  it('goes red over the limit and says by how much', () => {
+    expect(contentCounter(10_250)).toEqual({
+      text: '10,250/10,000',
+      state: 'over',
+      announce: '250 characters over the limit.',
+    })
   })
 })
 

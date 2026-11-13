@@ -6,19 +6,24 @@ import { createPackage } from '../lib/api/contributions'
 import type { ResourceType } from '../lib/api/packages'
 import {
   clearDraft,
+  contentCounter,
   describeCreateError,
   EMPTY_DRAFT,
   fieldLabels,
   imageProblem,
   isEmptyDraft,
+  isYouTubeLink,
   LIMITS,
   loadDraft,
+  normalizeLink,
   saveDraft,
   toNewPackage,
   validateDraft,
+  validateField,
   type Draft,
   type DraftField,
   type FieldErrors,
+  type TextField,
 } from '../lib/contribution'
 import { ImageError, prepareImage, type PreparedImage } from '../lib/images'
 import { useOnline } from '../lib/useOnline'
@@ -28,14 +33,18 @@ type Picked = PreparedImage & { key: string; alt: string }
 /** Field order on screen, so the first problem gets focus. */
 const FIELD_ORDER: DraftField[] = ['originalTitle', 'author', 'content', 'images', 'resourceLink']
 
+const TEXT_FIELDS: TextField[] = ['originalTitle', 'author', 'content', 'resourceLink']
+
 /**
  * Create a Package, text and video (screens 10 and 11, FR-5.2 to FR-5.7, FR-5.9).
  *
  * - The text fields are saved on the device as a draft while typing, so going offline,
  *   leaving, or a failed upload never loses them. Offline, Create is disabled with a reason.
  * - Images are compressed on the device until they fit the 500 KB cap (FR-5.6).
- * - Fields are checked here with the server's rules and messages; server errors map back to
- *   the same fields. A repeat of this device's own earlier submit counts as success.
+ * - Inline validation (FR-5.5): each field is checked when left, then live while it is
+ *   corrected; Content is always checked live against 10,000 characters. A video link must
+ *   be a single YouTube video. Bare links get https:// added. Server errors map back to the
+ *   same fields, and a repeat of this device's own earlier submit counts as success.
  */
 export function Component() {
   const navigate = useNavigate()
@@ -46,6 +55,7 @@ export function Component() {
   const [images, setImages] = useState<Picked[]>([])
   const [preparing, setPreparing] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
+  const [touched, setTouched] = useState<ReadonlySet<TextField>>(new Set())
   const [formError, setFormError] = useState<{ message: string; existingPackageId?: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [showVisualsHelp, setShowVisualsHelp] = useState(false)
@@ -53,6 +63,9 @@ export function Component() {
   const errorSummary = useRef<HTMLDivElement>(null)
   const ids = useIds()
   const labels = fieldLabels(draft.resourceType)
+  const counter = contentCounter(draft.content.length)
+  // A YouTube link under Text Resource is almost always a wrong type choice.
+  const looksLikeVideo = draft.resourceType === 'text' && isYouTubeLink(draft.resourceLink)
 
   // Keep the draft on the device (debounced: typing should not write on every key).
   useEffect(() => {
@@ -67,15 +80,46 @@ export function Component() {
   })
   useEffect(() => () => previews.current.forEach((i) => URL.revokeObjectURL(i.previewUrl)), [])
 
-  function update<K extends keyof Draft>(key: K, value: Draft[K]) {
-    setDraft((d) => ({ ...d, [key]: value }))
-    if (errors[key]) setErrors((e) => ({ ...e, [key]: undefined }))
+  /**
+   * Inline validation (FR-5.5): a field is checked when the contributor leaves it, and from
+   * then on as they type, so a message updates or disappears the moment the input is fixed.
+   * Nobody is told "required" while typing for the first time. Content is always checked
+   * live, so going over the limit (often by pasting) shows at once.
+   */
+  function update(field: TextField, value: string) {
+    const next = { ...draft, [field]: value }
+    setDraft(next)
+    if (field === 'content' || touched.has(field) || errors[field]) {
+      setErrors((e) => ({ ...e, [field]: validateField(field, next) }))
+    }
+  }
+
+  function blur(field: TextField) {
+    let next = draft
+    if (field === 'resourceLink') {
+      const tidy = normalizeLink(draft.resourceLink)
+      if (tidy !== draft.resourceLink) {
+        next = { ...draft, resourceLink: tidy }
+        setDraft(next)
+      }
+    }
+    setTouched((t) => new Set(t).add(field))
+    // An empty field the contributor only passed through is not an error yet.
+    if (!next[field].trim() && !touched.has(field)) return
+    setErrors((e) => ({ ...e, [field]: validateField(field, next) }))
   }
 
   function setType(type: ResourceType) {
-    update('resourceType', type)
-    // The link rule depends on the type (video must be YouTube): re-check only if shown.
-    setErrors((e) => ({ ...e, resourceLink: undefined }))
+    const next = { ...draft, resourceType: type }
+    setDraft(next)
+    // Messages and the link rule depend on the type (Video Title; video must be YouTube).
+    setErrors((e) => {
+      const updated = { ...e }
+      for (const field of TEXT_FIELDS) {
+        if (touched.has(field) || e[field]) updated[field] = validateField(field, next)
+      }
+      return updated
+    })
   }
 
   async function addImages(files: FileList | null) {
@@ -124,7 +168,11 @@ export function Component() {
     event.preventDefault()
     if (submitting || preparing || !online) return
     setFormError(null)
-    const problems = validateDraft(draft)
+    setTouched(new Set(TEXT_FIELDS))
+    // Tidy the link even if the field was never left (Create tapped straight from it).
+    const ready = { ...draft, resourceLink: normalizeLink(draft.resourceLink) }
+    if (ready.resourceLink !== draft.resourceLink) setDraft(ready)
+    const problems = validateDraft(ready)
     if (Object.values(problems).some(Boolean)) {
       showErrors(problems)
       return
@@ -132,7 +180,7 @@ export function Component() {
     setSubmitting(true)
     try {
       const created = await createPackage(
-        toNewPackage(draft, images.map((i) => i.alt)),
+        toNewPackage(ready, images.map((i) => i.alt)),
         images.map((i) => new File([i.blob], i.name, { type: i.blob.type })),
       )
       done(created.id)
@@ -157,6 +205,7 @@ export function Component() {
   function discardDraft() {
     setDraft(EMPTY_DRAFT)
     setErrors({})
+    setTouched(new Set())
     setShowRestored(false)
     clearDraft()
   }
@@ -206,23 +255,25 @@ export function Component() {
           </div>
         </fieldset>
 
-        <TextField
+        <InputField
           id={ids.originalTitle}
           label={labels.title}
           required
           value={draft.originalTitle}
           onChange={(v) => update('originalTitle', v)}
+          onBlur={() => blur('originalTitle')}
           placeholder={draft.resourceType === 'video' ? 'Enter the title of the video' : 'Enter the original title'}
           maxLength={LIMITS.titleChars}
           error={errors.originalTitle}
         />
 
-        <TextField
+        <InputField
           id={ids.author}
           label={labels.author}
           required
           value={draft.author}
           onChange={(v) => update('author', v)}
+          onBlur={() => blur('author')}
           placeholder={draft.resourceType === 'video' ? 'Enter the channel name' : 'Enter the author'}
           maxLength={LIMITS.authorChars}
           error={errors.author}
@@ -244,7 +295,6 @@ export function Component() {
                 ? 'Paste the video transcript here'
                 : 'Paste the article or resource content here'
             }
-            maxLength={LIMITS.contentChars}
             aria-invalid={Boolean(errors.content)}
             aria-describedby={`${ids.content}-hint ${ids.content}-count${errors.content ? ` ${ids.content}-error` : ''}`}
           />
@@ -252,12 +302,17 @@ export function Component() {
             <span id={`${ids.content}-hint`} className="field__hint">
               {draft.resourceType === 'video'
                 ? "Without a transcript we try the video page; if that doesn't work you'll be asked to paste one."
-                : "Leave empty and we read the link. Paste the text if the page needs a login."}
+                : 'Leave empty and we read the link. Paste the text if the page needs a login.'}
             </span>
-            <span id={`${ids.content}-count`} className="field__count" aria-live="polite">
-              {draft.content.length.toLocaleString('en-US')}/{LIMITS.contentChars.toLocaleString('en-US')}
+            {/* Not cut off at the limit: a long paste stays visible, turns red and says how much to remove. */}
+            <span id={`${ids.content}-count`} className={`field__count field__count--${counter.state}`}>
+              {counter.text}
             </span>
           </div>
+          {/* Screen readers hear the count only near and over the limit, not on every key. */}
+          <span className="visually-hidden" aria-live="polite">
+            {counter.announce}
+          </span>
           <FieldError id={`${ids.content}-error`} message={errors.content} />
         </div>
 
@@ -364,19 +419,26 @@ export function Component() {
               spellCheck={false}
               value={draft.resourceLink}
               onChange={(e) => update('resourceLink', e.target.value)}
-              onBlur={() => {
-                if (draft.resourceLink.trim()) {
-                  const problem = validateDraft(draft).resourceLink
-                  setErrors((e) => ({ ...e, resourceLink: problem }))
-                }
-              }}
+              onBlur={() => blur('resourceLink')}
               placeholder={labels.link}
               required
               aria-invalid={Boolean(errors.resourceLink)}
-              aria-describedby={errors.resourceLink ? `${ids.resourceLink}-error` : undefined}
+              aria-describedby={
+                [errors.resourceLink && `${ids.resourceLink}-error`, looksLikeVideo && `${ids.resourceLink}-suggest`]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
             />
           </div>
           <FieldError id={`${ids.resourceLink}-error`} message={errors.resourceLink} />
+          {looksLikeVideo && (
+            <p id={`${ids.resourceLink}-suggest`} className="field__suggest">
+              <span>This looks like a YouTube video.</span>
+              <button type="button" className="field__suggest-action" onClick={() => setType('video')}>
+                Switch to Video Resource
+              </button>
+            </p>
+          )}
         </div>
 
         {!online && (
@@ -456,7 +518,7 @@ function TypeOption({
   )
 }
 
-function TextField(props: {
+function InputField(props: {
   id: string
   label: string
   value: string
@@ -466,6 +528,7 @@ function TextField(props: {
   required?: boolean
   error?: string
   autoComplete?: string
+  onBlur: () => void
 }) {
   const errorId = `${props.id}-error`
   return (
@@ -478,6 +541,7 @@ function TextField(props: {
         className="input"
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
+        onBlur={props.onBlur}
         placeholder={props.placeholder}
         maxLength={props.maxLength}
         required={props.required}

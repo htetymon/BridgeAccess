@@ -48,29 +48,120 @@ export function fieldLabels(type: ResourceType) {
       }
 }
 
-/** Same messages as the server, so a field reads the same whichever side caught it. */
+/** Fields checked as the contributor types (FR-5.5); images are checked when picked. */
+export type TextField = Exclude<keyof Draft, 'resourceType'>
+
+/**
+ * One field's problem, or undefined. Messages say what to do, in the form's own words
+ * (Video Title, Channel Name for a video), so they read well right under the field.
+ */
+export function validateField(field: TextField, draft: Draft): string | undefined {
+  const video = draft.resourceType === 'video'
+  switch (field) {
+    case 'originalTitle': {
+      const title = draft.originalTitle.trim()
+      if (!title) return video ? 'Enter the video title.' : 'Enter the original title.'
+      if (title.length > LIMITS.titleChars) return tooLong(LIMITS.titleChars)
+      return undefined
+    }
+    case 'author': {
+      const author = draft.author.trim()
+      if (!author) return video ? 'Enter the channel name.' : 'Enter the author.'
+      if (author.length > LIMITS.authorChars) return tooLong(LIMITS.authorChars)
+      return undefined
+    }
+    case 'content': {
+      const over = draft.content.length - LIMITS.contentChars
+      if (over > 0) {
+        return `Use at most ${LIMITS.contentChars.toLocaleString('en-US')} characters. Remove ${over.toLocaleString('en-US')}.`
+      }
+      return undefined
+    }
+    case 'resourceLink':
+      return linkProblem(draft.resourceLink, draft.resourceType)
+  }
+}
+
 export function validateDraft(draft: Draft): FieldErrors {
   const errors: FieldErrors = {}
-  const required = 'This field is required.'
-  const title = draft.originalTitle.trim()
-  const author = draft.author.trim()
-  const link = draft.resourceLink.trim()
-
-  if (!title) errors.originalTitle = required
-  else if (title.length > LIMITS.titleChars) errors.originalTitle = tooLong(LIMITS.titleChars)
-
-  if (!author) errors.author = required
-  else if (author.length > LIMITS.authorChars) errors.author = tooLong(LIMITS.authorChars)
-
-  if (draft.content.length > LIMITS.contentChars) errors.content = tooLong(LIMITS.contentChars)
-
-  if (!link) errors.resourceLink = required
-  else if (link.length > LIMITS.linkChars) errors.resourceLink = tooLong(LIMITS.linkChars)
-  else if (!HTTP_RE.test(link)) errors.resourceLink = 'Enter a link that starts with http:// or https://.'
-  else if (draft.resourceType === 'video' && !YOUTUBE_RE.test(link))
-    errors.resourceLink = 'Enter a YouTube link (youtube.com or youtu.be).'
-
+  for (const field of ['originalTitle', 'author', 'content', 'resourceLink'] as const) {
+    const problem = validateField(field, draft)
+    if (problem) errors[field] = problem
+  }
   return errors
+}
+
+function linkProblem(raw: string, type: ResourceType): string | undefined {
+  const link = raw.trim()
+  if (!link) return type === 'video' ? 'Enter the YouTube video link.' : 'Enter the link to the resource.'
+  if (link.length > LIMITS.linkChars) return tooLong(LIMITS.linkChars)
+  if (!HTTP_RE.test(link)) return 'Enter a link that starts with http:// or https://.'
+  if (type === 'video') {
+    if (!YOUTUBE_RE.test(link)) return 'Enter a YouTube link (youtube.com or youtu.be).'
+    if (!youTubeVideoId(link)) return "This YouTube link isn't a video. Open the video and copy its link."
+  }
+  return undefined
+}
+
+const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/
+
+/**
+ * The video ID of a YouTube link, or null if the link is not a single video (a channel,
+ * playlist or the home page has no transcript to learn from). Knows the usual forms:
+ * youtube.com/watch?v=ID, youtu.be/ID, and /shorts/, /embed/, /live/ and /v/ paths, on any
+ * youtube.com subdomain (www, m, music). Hosts follow the server's rule.
+ */
+export function youTubeVideoId(link: string): string | null {
+  let url: URL
+  try {
+    url = new URL(link.trim())
+  } catch {
+    return null
+  }
+  if (!/^https?:$/.test(url.protocol)) return null
+  const host = url.hostname.toLowerCase()
+  let id: string | null | undefined
+  if (host === 'youtu.be') {
+    id = url.pathname.split('/')[1]
+  } else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+    const [, first, second] = url.pathname.split('/')
+    if (first === 'watch') id = url.searchParams.get('v')
+    else if (['shorts', 'embed', 'live', 'v'].includes(first)) id = second
+  }
+  return id && VIDEO_ID_RE.test(id) ? id : null
+}
+
+/** For the "this looks like a video" hint on a Text Resource. */
+export function isYouTubeLink(link: string): boolean {
+  return YOUTUBE_RE.test(link.trim())
+}
+
+/**
+ * Tidies a link when the field is left: trims it and adds https:// to a bare address such
+ * as "www.example.org/page" or "youtu.be/abc", the most common slip on a phone keyboard.
+ * Anything else is returned trimmed and left for validation to explain.
+ */
+export function normalizeLink(raw: string): string {
+  const link = raw.trim()
+  if (!link || /^[a-z][a-z0-9+.-]*:\/\//i.test(link)) return link
+  if (link.startsWith('//')) return `https:${link}`
+  if (/^[^\s/:@]+\.[a-z]{2,}([/?#:]|$)/i.test(link)) return `https://${link}`
+  return link
+}
+
+export type CounterState = 'ok' | 'near' | 'over'
+
+/**
+ * Counter text and state: amber from 90 % of the limit, red when over. `announce` is what a
+ * screen reader should hear; null while far from the limit, so typing is not narrated.
+ */
+export function contentCounter(length: number): { text: string; state: CounterState; announce: string | null } {
+  const max = LIMITS.contentChars
+  const fmt = (n: number) => n.toLocaleString('en-US')
+  const text = `${fmt(length)}/${fmt(max)}`
+  if (length > max) return { text, state: 'over', announce: `${fmt(length - max)} characters over the limit.` }
+  if (length >= max * 0.9) return { text, state: 'near', announce: `${fmt(max - length)} characters left.` }
+  return { text, state: 'ok', announce: null }
 }
 
 /** Checks an image after on-device compression; null when it is fine. */
@@ -111,7 +202,8 @@ export function loadDraft(): Draft {
       resourceType: parsed.resourceType === 'video' ? 'video' : 'text',
       originalTitle: str(parsed.originalTitle),
       author: str(parsed.author),
-      content: str(parsed.content).slice(0, LIMITS.contentChars),
+      // Not cut to the limit: over-limit text is shown and explained, never silently lost.
+      content: str(parsed.content),
       resourceLink: str(parsed.resourceLink),
     }
   } catch {
