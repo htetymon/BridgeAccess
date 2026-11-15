@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import BlobImage from '../components/BlobImage'
+import QuizStep from '../components/QuizStep'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from '../components/Icons'
 import type { LearningStep, PackageBundle } from '../lib/api/packages'
-import { db, type LocalImage, type LocalProgress } from '../lib/db'
+import { db, type LocalImage, type LocalProgress, type LocalQuizAttempt } from '../lib/db'
 import { completeStep, openStep, resumeStep } from '../lib/progress'
+import { latestAttempt } from '../lib/quiz'
 import { useLiveQuery } from '../lib/useLiveQuery'
 
 const STEP_LABEL: Record<LearningStep, string> = {
@@ -14,16 +16,23 @@ const STEP_LABEL: Record<LearningStep, string> = {
   quiz: 'Quiz',
 }
 
-type ViewerData = { bundle?: PackageBundle; progress?: LocalProgress; images: LocalImage[]; downloaded: boolean }
+type ViewerData = {
+  bundle?: PackageBundle
+  progress?: LocalProgress
+  images: LocalImage[]
+  downloaded: boolean
+  latest?: LocalQuizAttempt
+}
 
 async function readViewer(packageId: string): Promise<ViewerData> {
-  const [pkg, stored, progress, images] = await Promise.all([
+  const [pkg, stored, progress, images, latest] = await Promise.all([
     db.packages.get(packageId),
     db.bundles.get(packageId),
     db.progress.get(packageId),
     db.images.where('packageId').equals(packageId).sortBy('position'),
+    latestAttempt(packageId),
   ])
-  return { bundle: stored?.bundle, progress, images, downloaded: pkg?.downloadStatus === 'downloaded' }
+  return { bundle: stored?.bundle, progress, images, latest, downloaded: pkg?.downloadStatus === 'downloaded' }
 }
 
 /**
@@ -57,7 +66,15 @@ export function Component() {
       </main>
     )
   }
-  return <Viewer packageId={packageId} bundle={data.value.bundle} progress={data.value.progress} images={data.value.images} />
+  return (
+    <Viewer
+      packageId={packageId}
+      bundle={data.value.bundle}
+      progress={data.value.progress}
+      images={data.value.images}
+      latest={data.value.latest}
+    />
+  )
 }
 
 function Viewer({
@@ -65,11 +82,13 @@ function Viewer({
   bundle,
   progress,
   images,
+  latest,
 }: {
   packageId: string
   bundle: PackageBundle
   progress?: LocalProgress
   images: LocalImage[]
+  latest?: LocalQuizAttempt
 }) {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -81,6 +100,9 @@ function Viewer({
   const headingRef = useRef<HTMLHeadingElement>(null)
   const [saving, setSaving] = useState(false)
   const firstRender = useRef(true)
+  // Quiz answers in progress live here, so visiting another step does not lose them.
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({})
+  const [quizIndex, setQuizIndex] = useState(0)
 
   // Keep the resolved step in the URL (refresh and Back stay on it), and record it as the
   // resume point. Moving between steps replaces the entry: Back leaves the viewer.
@@ -168,7 +190,20 @@ function Viewer({
         )}
       </div>
 
-      <StepContent step={step} bundle={bundle} images={images} />
+      {step === 'quiz' ? (
+        <QuizStep
+          packageId={packageId}
+          questions={[...bundle.quiz.questions].sort((a, b) => a.position - b.position)}
+          latest={latest}
+          selected={quizAnswers}
+          onSelect={setQuizAnswers}
+          index={quizIndex}
+          onIndex={setQuizIndex}
+          onPreviousStep={index > 0 ? () => go(steps[index - 1]) : undefined}
+        />
+      ) : (
+        <StepContent step={step} bundle={bundle} images={images} />
+      )}
 
       {step !== 'quiz' && (
         <div className="mark-complete">
@@ -178,7 +213,12 @@ function Viewer({
           ) : (
             <>
               <p>Mark this step as complete when you've finished reading and understand the key ideas.</p>
-              <button type="button" className="button button--secondary button--small" onClick={markComplete} disabled={saving}>
+              <button
+                type="button"
+                className="button button--secondary button--small"
+                onClick={markComplete}
+                disabled={saving}
+              >
                 <CheckIcon size={16} /> Mark Complete
               </button>
             </>
@@ -186,21 +226,23 @@ function Viewer({
         </div>
       )}
 
-      <div className="viewer__footer">
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={() => go(steps[index - 1])}
-          disabled={index === 0}
-        >
-          <ChevronLeftIcon size={18} /> Previous
-        </button>
-        {index < steps.length - 1 && (
-          <button type="button" className="button button--primary" onClick={() => go(steps[index + 1])}>
-            Next <ChevronRightIcon size={18} />
+      {step !== 'quiz' && (
+        <div className="viewer__footer">
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={() => go(steps[index - 1])}
+            disabled={index === 0}
+          >
+            <ChevronLeftIcon size={18} /> Previous
           </button>
-        )}
-      </div>
+          {index < steps.length - 1 && (
+            <button type="button" className="button button--primary" onClick={() => go(steps[index + 1])}>
+              Next <ChevronRightIcon size={18} />
+            </button>
+          )}
+        </div>
+      )}
 
       <p className="visually-hidden" role="status">
         {completed ? `${STEP_LABEL[step]} completed` : ''}
@@ -234,7 +276,9 @@ function StepContent({ step, bundle, images }: { step: LearningStep; bundle: Pac
   if (step === 'diagram') {
     return (
       <div className="step-body diagrams">
-        {images.length === 0 && <p>The images of this package are not on this device. Download it again to see them.</p>}
+        {images.length === 0 && (
+          <p>The images of this package are not on this device. Download it again to see them.</p>
+        )}
         {images.map((image) => (
           <figure key={image.id} className="diagrams__item">
             <BlobImage blob={image.blob} alt={image.altText ?? ''} className="diagrams__image" />
@@ -244,12 +288,7 @@ function StepContent({ step, bundle, images }: { step: LearningStep; bundle: Pac
       </div>
     )
   }
-  return (
-    <div className="step-body">
-      <p>Answer all questions to complete this package.</p>
-      <p className="empty-state">The questions will appear here.</p>
-    </div>
-  )
+  return null // the quiz is rendered by QuizStep
 }
 
 /** The summary is plain text; blank lines separate paragraphs. */

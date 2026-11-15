@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ApiError } from './api/client'
 import { getPackage, type LearningStep, type PackageBundle, type PackageDetail } from './api/packages'
-import { db as appDb, type BridgeAccessDb, type LocalImage, type LocalPackage, type LocalProgress } from './db'
+import {
+  db as appDb,
+  type BridgeAccessDb,
+  type LocalImage,
+  type LocalPackage,
+  type LocalProgress,
+  type LocalQuizAttempt,
+} from './db'
+import { latestAttempt } from './quiz'
 import { useLiveQuery } from './useLiveQuery'
 
 /**
@@ -26,6 +34,8 @@ export type PackageView = {
   downloadedAt?: string
   downloaded: boolean
   learnt: boolean
+  /** The latest quiz attempt on this device (FR-7.6), shown as the quiz result. */
+  latest?: LocalQuizAttempt
   /** Remote cover URL; a downloaded package's cover is a stored blob instead (see coverBlob). */
   coverUrl: string | null
   coverAlt: string | null
@@ -44,18 +54,20 @@ type Local = {
   bundle?: PackageBundle
   progress?: LocalProgress
   cover?: LocalImage
+  latest?: LocalQuizAttempt
 }
 
 /** One read of everything stored for the package; re-runs when any of it changes. */
 export async function readLocal(packageId: string, store: BridgeAccessDb = appDb): Promise<Local> {
-  const [pkg, stored, progress, images] = await Promise.all([
+  const [pkg, stored, progress, images, latest] = await Promise.all([
     store.packages.get(packageId),
     store.bundles.get(packageId),
     store.progress.get(packageId),
     store.images.where('packageId').equals(packageId).toArray(),
+    latestAttempt(packageId, store),
   ])
   const cover = images.sort((a, b) => a.position - b.position)[0]
-  return { pkg, bundle: stored?.bundle, progress, cover }
+  return { pkg, bundle: stored?.bundle, progress, cover, latest }
 }
 
 export function fromBundle(bundle: PackageBundle, local: Local): PackageView {
@@ -76,6 +88,7 @@ export function fromBundle(bundle: PackageBundle, local: Local): PackageView {
     downloadedAt: local.pkg?.downloadedAt,
     downloaded: true,
     learnt: Boolean(local.progress?.learntAt),
+    latest: local.latest,
     coverUrl: first?.url ?? null,
     coverAlt: first?.altText ?? null,
   }
@@ -96,6 +109,7 @@ export function fromDetail(detail: PackageDetail, local: Local): PackageView {
     publishedAt: detail.publishedAt,
     downloaded: false,
     learnt: Boolean(local.progress?.learntAt),
+    latest: local.latest,
     coverUrl: detail.coverImageUrl,
     coverAlt: null,
   }

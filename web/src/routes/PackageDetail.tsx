@@ -2,6 +2,7 @@ import { useEffect, useId } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import BlobImage from '../components/BlobImage'
 import DownloadControl from '../components/DownloadControl'
+import { QuizResult } from '../components/QuizStep'
 import {
   BookIcon,
   CalendarIcon,
@@ -186,6 +187,8 @@ function PackageBody({
               .
             </span>
           </p>
+
+          {view.latest && <QuizResult attempt={view.latest} />}
 
           <div className="package-screen__action">
             {view.downloaded ? (
