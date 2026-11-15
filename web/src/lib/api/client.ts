@@ -11,6 +11,7 @@ import { getDeviceId, randomUuid } from '../deviceId'
  * - Failures surface as ApiError with a `kind` the UI can branch on.
  *
  * ETag / 304 needs no code here: the browser HTTP cache revalidates GETs automatically.
+ * Offline, a GET is still tried once, so the service worker can answer it from its cache.
  */
 
 export const API_BASE = '/api/v1'
@@ -115,7 +116,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const url = buildUrl(path, options.query)
 
   for (let attempt = 1; ; attempt++) {
-    if (!transport.isOnline()) {
+    // Offline, a GET still gets one try: the service worker may answer it from its cache
+    // (catalogue reads, see vite.config.ts); without a cached copy it fails at once. Writes
+    // and retries are not attempted offline.
+    if (!transport.isOnline() && (method !== 'GET' || attempt > 1)) {
       throw new ApiError({ kind: 'offline', message: OFFLINE_MESSAGE, requestId })
     }
 

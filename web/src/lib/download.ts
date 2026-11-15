@@ -112,6 +112,8 @@ async function run(packageId: string, options: DownloadOptions): Promise<Downloa
 async function attempt(packageId: string, options: DownloadOptions): Promise<DownloadResult> {
   const store = options.store ?? appDb
   const { signal } = options
+  // A download always needs the network (nothing of it is served from a cache): fail at once.
+  if (!transport.isOnline()) throw new ApiError({ kind: 'offline', message: OFFLINE_MESSAGE, requestId: randomUuid() })
   const manifest = await getManifest(packageId, signal)
 
   const bundlePart = manifest.parts.find((p) => p.kind === 'bundle')

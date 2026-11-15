@@ -155,11 +155,25 @@ describe('timeouts, offline and cancellation', () => {
     expect(calls).toHaveLength(2)
   })
 
-  it('fails fast when offline, without a request', async () => {
+  it('offline, sends no write at all', async () => {
     transport.isOnline = () => false
     respondWith()
-    await expect(apiRequest('/packages')).rejects.toMatchObject({ kind: 'offline' })
+    await expect(apiRequest('/me/bookmarks/x', { method: 'PUT' })).rejects.toMatchObject({ kind: 'offline' })
     expect(calls).toHaveLength(0)
+  })
+
+  it('offline, tries a GET once so the service worker cache can answer it', async () => {
+    transport.isOnline = () => false
+    respondWith(json(200, { items: [], nextCursor: null }))
+    await expect(apiRequest('/packages')).resolves.toEqual({ items: [], nextCursor: null })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('offline with nothing cached, a GET fails once as offline, without retrying', async () => {
+    transport.isOnline = () => false
+    respondWith(new TypeError('Failed to fetch'))
+    await expect(apiRequest('/packages')).rejects.toMatchObject({ kind: 'offline' })
+    expect(calls).toHaveLength(1)
   })
 
   it('stops retrying when the connection drops between attempts', async () => {

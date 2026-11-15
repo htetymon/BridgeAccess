@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "generate-pwa-assets": "pwa-assets-generator",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:sw": "vitest run --config vitest.sw.config.ts"
   },
   "dependencies": {
     "dexie": "^4.4.7",
