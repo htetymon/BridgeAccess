@@ -98,6 +98,23 @@ class GeminiServiceTest {
 	}
 
 	@Test
+	void attachesTheYouTubeVideoAndUsesItAsTheSource() {
+		LessonSource video = new LessonSource("Your Words Control Your Reality", "Channel",
+				"https://youtu.be/Nmcgbcbpsp8", "video", null, "https://www.youtube.com/watch?v=Nmcgbcbpsp8");
+		this.server.expect(requestTo(URL))
+			.andExpect(jsonPath("$.contents[0].parts[0].fileData.fileUri")
+				.value("https://www.youtube.com/watch?v=Nmcgbcbpsp8"))
+			.andExpect(jsonPath("$.contents[0].parts[1].text",
+					Matchers.allOf(Matchers.containsString("Source type: video"),
+							Matchers.containsString("The source is the attached video"),
+							Matchers.not(Matchers.containsString("<source>")))))
+			.andRespond(withSuccess(answer(LESSON, "STOP"), MediaType.APPLICATION_JSON));
+
+		assertThat(this.service.generateLesson(video).title()).isEqualTo("How Clean Energy Works");
+		this.server.verify();
+	}
+
+	@Test
 	void retrySendsTheCorrectionAfterTheSource() {
 		String correction = LessonPrompt.correction(java.util.List.of("quiz has 4 questions; give exactly 5"));
 		this.server.expect(requestTo(URL))

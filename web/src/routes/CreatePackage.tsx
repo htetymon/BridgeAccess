@@ -415,7 +415,7 @@ export function Component() {
             <div className="field__foot">
               <span id={`${ids.content}-hint`} className="field__hint">
                 {draft.resourceType === 'video'
-                  ? "Without a transcript we try the video page; if that doesn't work you'll be asked to paste one."
+                  ? 'Leave empty and the AI watches the video. Paste a transcript if you have one.'
                   : 'Leave empty and we read the link. Paste the text if the page needs a login.'}
               </span>
               {/* Not cut off at the limit: a long paste stays visible, turns red and says how much to remove. */}

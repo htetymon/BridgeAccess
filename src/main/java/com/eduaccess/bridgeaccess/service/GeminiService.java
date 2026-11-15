@@ -1,5 +1,6 @@
 package com.eduaccess.bridgeaccess.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,9 +36,19 @@ public class GeminiService {
 
 	static final String API_KEY_HEADER = "x-goog-api-key";
 
-	/** What the lesson is built from. {@code sourceText} is pasted content or the read link. */
+	/**
+	 * What the lesson is built from. {@code sourceText} is pasted content or the read link;
+	 * {@code videoUrl} is a canonical YouTube URL attached for Gemini to watch directly, used
+	 * instead of the text when the contributor pasted no transcript.
+	 */
 	public record LessonSource(String originalTitle, String author, String resourceLink, String resourceType,
-			String sourceText) {
+			String sourceText, String videoUrl) {
+
+		public LessonSource(String originalTitle, String author, String resourceLink, String resourceType,
+				String sourceText) {
+			this(originalTitle, author, resourceLink, resourceType, sourceText, null);
+		}
+
 	}
 
 	private final RestClient restClient;
@@ -75,13 +86,20 @@ public class GeminiService {
 	}
 
 	private Map<String, Object> requestBody(LessonSource source, String correction) {
-		String user = LessonPrompt.userText(source.originalTitle(), source.author(), source.resourceLink(),
-				source.resourceType(), source.sourceText());
+		String user = source.videoUrl() != null
+				? LessonPrompt.videoUserText(source.originalTitle(), source.author(), source.resourceLink())
+				: LessonPrompt.userText(source.originalTitle(), source.author(), source.resourceLink(),
+						source.resourceType(), source.sourceText());
 		if (correction != null && !correction.isBlank()) {
 			user = user + "\n\n" + correction;
 		}
+		List<Map<String, Object>> parts = new ArrayList<>();
+		if (source.videoUrl() != null) {
+			parts.add(Map.of("fileData", Map.of("fileUri", source.videoUrl())));
+		}
+		parts.add(Map.of("text", user));
 		return Map.of("systemInstruction", Map.of("parts", List.of(Map.of("text", LessonPrompt.SYSTEM_INSTRUCTION))),
-				"contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", user)))),
+				"contents", List.of(Map.of("role", "user", "parts", parts)),
 				"generationConfig",
 				Map.of("responseMimeType", "application/json", "responseJsonSchema", LessonPrompt.responseSchema(),
 						"temperature", this.properties.temperature(), "maxOutputTokens",

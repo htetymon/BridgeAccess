@@ -655,7 +655,7 @@ Create a package from a text or video resource. Responds immediately with `202 A
 
 **What the job does** (server side, for reference)
 
-1. Use `content` if present. Otherwise fetch the link, with SSRF protection. If the page cannot be read, fail with a message asking for pasted content. The AI never invents content (FR-6.3).
+1. Use `content` if present. Otherwise, for a YouTube video, give the video itself to Gemini to watch; for any other link, fetch the page with SSRF protection. If the source cannot be read, fail with a message asking for pasted content. The AI never invents content (FR-6.3).
 2. Ask Gemini for: learner-friendly title, subject, overview, 3 to 5 key takeaways, a 100 to 150 word summary, 4 to 6 key concepts, and exactly 5 quiz questions with explanations. Write in the AI's own words, use only facts from the source (FR-6.1, FR-6.7).
 3. Validate (question count, 4 options each, answer index, subject). On failure retry once, then mark `failed` (FR-6.4).
 4. Optimise images to WebP at about 80 KB or less (FR-6.5). If the package has images, generate one diagram. A diagram failure does not block publishing (FR-6.2, FR-6.6).
@@ -838,7 +838,7 @@ The request itself returns `400` only if the body is malformed, has more than 50
 | Link cannot be read, no content pasted | "We couldn't read this link. Please paste the content and try again." |
 | AI output invalid after one retry | "We couldn't build a reliable lesson from this. Please try again." |
 | Job timed out | "This took too long. Please try again." |
-| Video with no transcript and no readable page | "We couldn't read this video. Please paste the transcript and try again." |
+| Video that cannot be watched (too long, private, age-restricted) and no pasted transcript | "We couldn't read this video. Please paste the transcript and try again." |
 
 ---
 
