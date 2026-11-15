@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import BlobImage from '../components/BlobImage'
 import DownloadControl from '../components/DownloadControl'
 import {
   BookIcon,
@@ -238,27 +239,12 @@ function PackageBody({
   )
 }
 
-/**
- * The cover: a server URL, or a stored Blob shown through an object URL that is released
- * when the image changes or the screen closes (set on the element, so no extra render).
- */
+/** The cover: a server URL, or a stored image for a downloaded package. */
 function CoverImage({ cover, alt }: { cover: NonNullable<Cover>; alt: string }) {
-  const ref = useRef<HTMLImageElement>(null)
-  const blob = 'blob' in cover ? cover.blob : undefined
-  useEffect(() => {
-    if (!blob || !ref.current) return
-    const url = URL.createObjectURL(blob)
-    ref.current.src = url
-    return () => URL.revokeObjectURL(url)
-  }, [blob])
-  return (
-    <img
-      ref={ref}
-      className="package-cover"
-      src={'url' in cover ? cover.url : undefined}
-      alt={alt}
-      decoding="async"
-    />
+  return 'blob' in cover ? (
+    <BlobImage blob={cover.blob} className="package-cover" alt={alt} />
+  ) : (
+    <img className="package-cover" src={cover.url} alt={alt} decoding="async" />
   )
 }
 

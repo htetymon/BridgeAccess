@@ -1716,3 +1716,209 @@ button {
   gap: 6px;
   color: var(--color-primary);
 }
+
+/* ---------------------------------------------------------------- viewer */
+
+.viewer {
+  /* Room for the fixed Previous / Next bar. */
+  padding-bottom: calc(96px + var(--safe-bottom));
+}
+
+.viewer__bar {
+  display: flex;
+  margin: -8px 0 8px -8px;
+}
+
+.step-pills {
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 2px var(--gutter) 6px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.step-pill__mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.6;
+}
+
+.step-pill--done .step-pill__mark {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: #fff;
+  opacity: 1;
+}
+
+.step-pill--current {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.step-pill--current .step-pill__mark {
+  border-color: #fff;
+  opacity: 1;
+}
+
+.viewer__progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 20px;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.viewer__progress progress {
+  flex: 1;
+  height: 8px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--color-border);
+  accent-color: var(--color-primary);
+}
+
+.viewer__progress progress::-webkit-progress-bar {
+  background: var(--color-border);
+}
+
+.viewer__progress progress::-webkit-progress-value {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.viewer__progress progress::-moz-progress-bar {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.viewer__package {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.viewer__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 4px 0 12px;
+}
+
+.viewer__heading h1 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+}
+
+.viewer__heading h1:focus {
+  outline: none;
+}
+
+.step-body {
+  display: grid;
+  gap: 14px;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+}
+
+.concepts {
+  margin: 0;
+}
+
+.concepts__item {
+  padding: 14px;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.concepts dt {
+  font-weight: 700;
+}
+
+.concepts dd {
+  margin: 4px 0 0;
+}
+
+.diagrams__item {
+  margin: 0;
+}
+
+.diagrams__image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-card);
+  background: var(--color-border);
+}
+
+.diagrams figcaption {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.mark-complete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  font-size: 0.9375rem;
+}
+
+.mark-complete > svg {
+  flex-shrink: 0;
+  color: var(--color-primary);
+}
+
+.mark-complete p {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.viewer__footer {
+  position: fixed;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px var(--gutter) calc(12px + var(--safe-bottom));
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.viewer__footer .button:only-child {
+  margin-right: auto;
+}
