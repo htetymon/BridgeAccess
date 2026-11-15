@@ -276,15 +276,15 @@ export function describeCreateError(error: unknown): CreateOutcome {
       }
       return { kind: 'error', message: 'Some fields need attention.', fieldErrors }
     }
-    case 'DAILY_LIMIT_REACHED': {
+    case 'HOURLY_LIMIT_REACHED': {
       const resetsAt = typeof error.extras.resetsAt === 'string' ? new Date(error.extras.resetsAt) : null
       const when =
         resetsAt && !Number.isNaN(resetsAt.getTime())
           ? ` You can create more after ${resetsAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.`
-          : ' Try again tomorrow.'
+          : ' Try again in a little while.'
       return {
         kind: 'error',
-        message: `You have reached today's limit of ${error.extras.limit ?? 5} packages.${when} Your draft is saved.`,
+        message: `You have created ${error.extras.limit ?? 5} packages in the last hour.${when} Your draft is saved.`,
         fieldErrors: {},
       }
     }

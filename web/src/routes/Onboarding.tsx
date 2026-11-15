@@ -21,7 +21,7 @@ const SLIDES: Slide[] = [
     title: 'Create or Explore Learning Packages',
     body: (
       <p className="onboarding__text">
-        Turn articles and YouTube videos into packages with a summary, key concepts and a quiz, or download
+        Turn articles and YouTube videos into packages with details, key concepts and a quiz, or download
         packages other learners have made.
       </p>
     ),
@@ -154,7 +154,7 @@ function PackageArt() {
       {/* box */}
       <path d="M60 62 100 44l40 18v46l-40 18-40-18z" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="3" strokeLinejoin="round" />
       <path d="M60 62l40 18 40-18M100 80v46" fill="none" stroke="var(--color-ink)" strokeWidth="3" strokeLinejoin="round" />
-      {/* sparkles: AI summary and quiz */}
+      {/* sparkles: AI details and quiz */}
       <path d="M150 34v14m-7-7h14" stroke="var(--color-contribute)" strokeWidth="3" strokeLinecap="round" />
       <path d="M48 40v10m-5-5h10" stroke="var(--color-primary)" strokeWidth="3" strokeLinecap="round" />
     </ArtFrame>

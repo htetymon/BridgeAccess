@@ -49,20 +49,31 @@ public class ContributionRepository {
 		return rows.stream().findFirst();
 	}
 
-	/** Packages this device created since {@code since}, including failed and deleted ones. */
-	public int countCreatedSince(UUID deviceId, Instant since) {
+	/** Packages this device created after {@code since}, including failed and deleted ones. */
+	public int countCreatedAfter(UUID deviceId, Instant since) {
 		String sql = """
 				select count(*)
 				  from app.learning_packages
-				 where device_id = :deviceId and created_at >= :since""";
+				 where device_id = :deviceId and created_at > :since""";
 		Integer count = this.jdbc.queryForObject(sql, new MapSqlParameterSource("deviceId", deviceId)
 			.addValue("since", OffsetDateTime.ofInstant(since, ZoneOffset.UTC)), Integer.class);
 		return count == null ? 0 : count;
 	}
 
+	/** Oldest creation in the active rolling window, used to tell a client when a slot opens. */
+	public Optional<Instant> findOldestCreatedAfter(UUID deviceId, Instant since) {
+		String sql = """
+				select min(created_at)
+				  from app.learning_packages
+				 where device_id = :deviceId and created_at > :since""";
+		OffsetDateTime oldest = this.jdbc.queryForObject(sql, new MapSqlParameterSource("deviceId", deviceId)
+			.addValue("since", OffsetDateTime.ofInstant(since, ZoneOffset.UTC)), OffsetDateTime.class);
+		return Optional.ofNullable(oldest).map(OffsetDateTime::toInstant);
+	}
+
 	/**
 	 * Serialises creations by one device until the current transaction ends, so two parallel
-	 * requests cannot both pass the daily-limit count. Must run inside a transaction.
+	 * requests cannot both pass the hourly-limit count. Must run inside a transaction.
 	 */
 	public void lockDevice(UUID deviceId) {
 		this.jdbc.queryForObject(

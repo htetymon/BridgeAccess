@@ -59,12 +59,12 @@ public class ApiException extends RuntimeException {
 		return new ApiException(ErrorCode.DUPLICATE_LINK, ErrorCode.DUPLICATE_LINK.defaultMessage(), null, extras);
 	}
 
-	/** 429: the device used up today's creations (FR-5.10). */
-	public static ApiException dailyLimitReached(int limit, Instant resetsAt) {
+	/** 429: the device used up its creation slots for the current rolling hour. */
+	public static ApiException hourlyLimitReached(int limit, Instant resetsAt) {
 		Map<String, Object> extras = new LinkedHashMap<>();
 		extras.put("limit", limit);
 		extras.put("resetsAt", resetsAt);
-		return new ApiException(ErrorCode.DAILY_LIMIT_REACHED, ErrorCode.DAILY_LIMIT_REACHED.defaultMessage(), null,
+		return new ApiException(ErrorCode.HOURLY_LIMIT_REACHED, ErrorCode.HOURLY_LIMIT_REACHED.defaultMessage(), null,
 				extras);
 	}
 

@@ -19,7 +19,7 @@ public enum ErrorCode {
 	UNSUPPORTED_IMAGE_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Images must be PNG, JPG, or WebP."),
 	RANGE_NOT_SATISFIABLE(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "The requested range is not available."),
 	TOO_MANY_IMAGES(HttpStatus.UNPROCESSABLE_CONTENT, "You can add up to 3 images."),
-	DAILY_LIMIT_REACHED(HttpStatus.TOO_MANY_REQUESTS, "You have reached today's limit. Try again tomorrow."),
+	HOURLY_LIMIT_REACHED(HttpStatus.TOO_MANY_REQUESTS, "You have created five packages in the last hour."),
 	RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests. Please wait a moment."),
 	INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Something went wrong. Please try again."),
 	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "The service is busy. Please try again shortly."),

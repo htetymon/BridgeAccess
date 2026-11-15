@@ -46,7 +46,12 @@ public final class LessonPrompt {
 			Use Other if none fits.
 			- overview: 2 or 3 sentences on what the learner will learn.
 			- keyTakeaways: 3 to 5 short, separate points, one sentence each.
-			- summary: one or two paragraphs of 100 to 150 words in total.
+			- summary (shown to learners as Details): 300 to 400 words in exactly four clear paragraphs, \
+			with a blank line between paragraphs. Make it a short lesson, not a brief recap. In order, \
+			introduce the main idea and define important words; explain how the topic or process works; \
+			walk through a concrete example from the source; then explain why it matters and any limits \
+			or conditions the source describes. Use one main point per paragraph and plain, connected \
+			sentences that are easy to read aloud. Do not pad or repeat.
 			- keyConcepts: 4 to 6 important terms from the source, each with a 1 or 2 sentence \
 			explanation based on the source.
 			- quiz: exactly 5 multiple-choice questions. Each has exactly 4 different options, one \
@@ -111,7 +116,7 @@ public final class LessonPrompt {
 		properties.put("subject", Map.of("type", "string", "enum", SUBJECTS));
 		properties.put("overview", string("2 or 3 sentences."));
 		properties.put("keyTakeaways", array(string("One short sentence."), 3, 5));
-		properties.put("summary", string("100 to 150 words."));
+		properties.put("summary", string("300 to 400 words in four clear paragraphs; shown as Details."));
 		properties.put("keyConcepts",
 				array(object(Map.of("term", string("A term from the source."), "explanation",
 						string("1 or 2 sentences based on the source.")), List.of("term", "explanation")), 4, 6));

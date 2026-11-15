@@ -182,7 +182,8 @@ public abstract class PostgresIntegrationTest {
 
 	/** A lesson that passes LessonValidator, as Gemini would return it. */
 	static GeneratedLesson lesson() {
-		String summary = String.join(" ", IntStream.range(0, 100).mapToObj(i -> "energy").toList());
+		String paragraph = String.join(" ", IntStream.range(0, 80).mapToObj(i -> "energy").toList());
+		String summary = String.join("\n\n", java.util.Collections.nCopies(4, paragraph));
 		List<GeneratedLesson.QuizQuestion> quiz = IntStream.range(0, 5)
 			.mapToObj(i -> new GeneratedLesson.QuizQuestion("Question " + (i + 1) + " about renewable energy?",
 					List.of("Option A" + i, "Option B" + i, "Option C" + i, "Option D" + i), i % 4,

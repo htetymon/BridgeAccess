@@ -62,9 +62,9 @@ class ContributionControllerTest {
 	private static final UUID OTHER_DEVICE = UUID.fromString("99999999-2222-4333-8444-555555555555");
 	private static final UUID EXISTING = UUID.fromString("0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10");
 
-	/** 2026-11-13T15:30Z, so today's limit resets at 2026-11-14T00:00Z. */
+	/** Fixed request time for deterministic rolling-hour limit tests. */
 	private static final Instant NOW = Instant.parse("2026-11-13T15:30:00Z");
-	private static final Instant DAY_START = Instant.parse("2026-11-13T00:00:00Z");
+	private static final Instant HOUR_START = Instant.parse("2026-11-13T14:30:00Z");
 
 	private static final byte[] PNG = { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13 };
 	private static final byte[] JPEG = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 16, 'J', 'F' };
@@ -108,7 +108,7 @@ class ContributionControllerTest {
 	@BeforeEach
 	void defaults() {
 		given(this.repository.findLiveByLink(anyString())).willReturn(Optional.empty());
-		given(this.repository.countCreatedSince(any(), any())).willReturn(0);
+		given(this.repository.countCreatedAfter(any(), any())).willReturn(0);
 		given(this.repository.insertPackage(any())).willReturn(Instant.parse("2026-11-13T15:30:00.123456Z"));
 	}
 
@@ -138,9 +138,9 @@ class ContributionControllerTest {
 
 		// Limit is re-checked under the device lock, inside the transaction, before inserting.
 		InOrder order = inOrder(this.repository);
-		order.verify(this.repository).countCreatedSince(DEVICE, DAY_START);
+		order.verify(this.repository).countCreatedAfter(DEVICE, HOUR_START);
 		order.verify(this.repository).lockDevice(DEVICE);
-		order.verify(this.repository).countCreatedSince(DEVICE, DAY_START);
+		order.verify(this.repository).countCreatedAfter(DEVICE, HOUR_START);
 		order.verify(this.repository).insertPackage(any());
 	}
 
@@ -299,7 +299,7 @@ class ContributionControllerTest {
 	void duplicateWinsOverDailyLimit() throws Exception {
 		// A retry of the device's own request after a timeout must not be reported as a 429.
 		given(this.repository.findLiveByLink(any())).willReturn(Optional.of(new LinkOwner(EXISTING, DEVICE)));
-		given(this.repository.countCreatedSince(any(), any())).willReturn(5);
+		given(this.repository.countCreatedAfter(any(), any())).willReturn(5);
 		post(validText()).andExpect(status().isConflict());
 	}
 
@@ -317,23 +317,27 @@ class ContributionControllerTest {
 		verify(this.imageStore).delete(path.getValue());
 	}
 
-	// --------------------------------------------------------------- daily limit
+	// --------------------------------------------------------------- hourly limit
 
 	@Test
-	void dailyLimitReached() throws Exception {
-		given(this.repository.countCreatedSince(DEVICE, DAY_START)).willReturn(5);
+	void hourlyLimitReached() throws Exception {
+		given(this.repository.countCreatedAfter(DEVICE, HOUR_START)).willReturn(5);
+		given(this.repository.findOldestCreatedAfter(DEVICE, HOUR_START))
+			.willReturn(Optional.of(Instant.parse("2026-11-13T14:40:00Z")));
 
 		post(validText(), image("a.png", "image/png", PNG)).andExpect(status().isTooManyRequests())
-			.andExpect(jsonPath("$.error.code").value("DAILY_LIMIT_REACHED"))
+			.andExpect(jsonPath("$.error.code").value("HOURLY_LIMIT_REACHED"))
 			.andExpect(jsonPath("$.error.limit").value(5))
-			.andExpect(jsonPath("$.error.resetsAt").value("2026-11-14T00:00:00Z"));
+			.andExpect(jsonPath("$.error.resetsAt").value("2026-11-13T15:40:00Z"));
 		verify(this.imageStore, never()).put(any(), any(), any());
 		verify(this.repository, never()).lockDevice(any());
 	}
 
 	@Test
 	void limitReachedByParallelRequestIsCaughtUnderLock() throws Exception {
-		given(this.repository.countCreatedSince(DEVICE, DAY_START)).willReturn(4, 5);
+		given(this.repository.countCreatedAfter(DEVICE, HOUR_START)).willReturn(4, 5);
+		given(this.repository.findOldestCreatedAfter(DEVICE, HOUR_START))
+			.willReturn(Optional.of(Instant.parse("2026-11-13T14:40:00Z")));
 
 		post(validText(), image("a.png", "image/png", PNG)).andExpect(status().isTooManyRequests());
 

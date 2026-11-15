@@ -283,11 +283,11 @@ describe('describeCreateError', () => {
     })
   })
 
-  it('explains the daily limit and keeps the draft', () => {
+  it('explains the rolling hourly creation limit and keeps the draft', () => {
     const outcome = describeCreateError(
-      api({ status: 429, code: 'DAILY_LIMIT_REACHED', extras: { limit: 5, resetsAt: '2026-11-14T00:00:00Z' } }),
+      api({ status: 429, code: 'HOURLY_LIMIT_REACHED', extras: { limit: 5, resetsAt: '2026-11-13T15:40:00Z' } }),
     )
-    expect(outcome.kind === 'error' && outcome.message).toMatch(/today's limit of 5 packages.*draft is saved/)
+    expect(outcome.kind === 'error' && outcome.message).toMatch(/created 5 packages in the last hour.*draft is saved/)
   })
 
   it('puts image errors on the images field', () => {

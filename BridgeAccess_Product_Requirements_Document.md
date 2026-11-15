@@ -4,7 +4,7 @@ Version 1.0 (draft) · 10 November 2026 · Scope: 9-day MVP · Companion to the 
 
 ## 1. Summary
 
-BridgeAccess is a mobile-first progressive web app (PWA) that turns online educational content (articles and YouTube videos) into lightweight, offline-ready **learning packages**. Each package holds an AI-generated summary, key concepts, an optional diagram, and a 5-question quiz. A learner downloads a package once on a good connection and studies it anywhere with no connection, on an older or shared phone.
+BridgeAccess is a mobile-first progressive web app (PWA) that turns online educational content (articles and YouTube videos) into lightweight, offline-ready **learning packages**. Each package holds an AI-generated Details section, key concepts, an optional diagram, and a 5-question quiz. A learner downloads a package once on a good connection and studies it anywhere with no connection, on an older or shared phone.
 
 Tagline: **Learn more. Use less. Learn anywhere.**
 
@@ -63,7 +63,7 @@ Tagline: **Learn more. Use less. Learn anywhere.**
 
 ## 5. MVP scope
 
-**In scope:** onboarding, Home, Learn, Explore and Download, Contribute and Create (text and video resources), AI generation (summary, key concepts, quiz, optional diagram), package viewer and quiz with Review Answers, bookmarks, offline storage and background sync, and PWA installation.
+**In scope:** onboarding, Home, Learn, Explore and Download, Contribute and Create (text and video resources), AI generation (details, key concepts, quiz, optional diagram), package viewer and quiz with Review Answers, bookmarks, offline storage and background sync, and PWA installation.
 
 **Out of scope:** everything under non-goals above.
 
@@ -125,14 +125,14 @@ Priority: **P0** must ship, **P1** should ship, **P2** nice to have.
 | FR-5.7  | After submitting, the package shows as Processing and becomes available when ready. If it fails, show the reason and a Retry button.                                            | P0       |
 | FR-5.8  | A contributor can delete their own package.                                                                                                                                     | P0       |
 | FR-5.9  | Creating needs a connection. Offline, keep a draft and explain why Create is disabled.                                                                                          | P1       |
-
 | FR-5.10 | Info tooltip explaining what visuals are for.                                                                                                                                   | P2       |
+| FR-5.11 | No lifetime creation cap. A device may create up to 5 packages in any rolling hour; show when creation is available again.                                                       | P0       |
 
 ### 6.6 AI generation (Gemini, server side)
 
 | ID     | Requirement                                                                                                                                                                                      | Priority |
 |--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| FR-6.1 | Generate a learner-friendly title, a subject, an overview, 3 to 5 key takeaways, a 100 to 150 word summary, 4 to 6 key concepts, and exactly 5 multiple-choice quiz questions with explanations. | P0       |
+| FR-6.1 | Generate a learner-friendly title, a subject, an overview, 3 to 5 key takeaways, a 300 to 400 word Details lesson in four clear paragraphs, 4 to 6 key concepts, and exactly 5 multiple-choice quiz questions with explanations. | P0       |
 | FR-6.2 | For packages with visuals, generate one simple diagram.                                                                                                                                          | P1       |
 | FR-6.3 | If no content was pasted, read the link; for a YouTube video, let the AI watch the video. If it cannot be read, fail with a clear message asking the contributor to paste the content. Never invent content. | P0       |
 | FR-6.4 | Validate AI output (question count, options, answer index, category) and retry once before failing.                                                                                              | P0       |
@@ -146,7 +146,7 @@ Priority: **P0** must ship, **P1** should ship, **P2** nice to have.
 |---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | FR-7.1  | Package screen with two tabs. **Learn:** overview, key takeaways, Start Learning. **Details:** original title, author, resource link (opens the original), category, package type, date downloaded, size. | P0       |
 | FR-7.2  | Status badges: Downloaded and Learnt.                                                                                                                                                                     | P0       |
-| FR-7.3  | Learning steps: Summary, Key Concepts, Diagram (only if the package has images), Quiz. Show a step indicator, an N of M progress bar, and Previous and Next buttons.                                      | P0       |
+| FR-7.3  | Learning steps: Details, Key Concepts, Diagram (only if the package has images), Quiz. Show a step indicator, an N of M progress bar, and Previous and Next buttons.                                      | P0       |
 | FR-7.4  | Mark Complete on each step, with a Completed badge.                                                                                                                                                       | P0       |
 | FR-7.5  | Quiz: 5 multiple-choice questions, one at a time, all must be answered. Grade instantly with no connection.                                                                                               | P0       |
 | FR-7.6  | Result: score, percentage, pass or fail, and a completion message. Default pass mark is 60 percent (configurable). A pass gives the Learnt badge.                                                         | P0       |
@@ -186,7 +186,7 @@ Numbers are **proposed targets**. Confirm them against your real devices and net
 | Part              | Details                                                                                                                                                    |
 |-------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Metadata          | Title (AI), original title, author or channel, resource link, resource type (text or video), subject, package type (text only or with visual), size, dates |
-| Text content      | Overview, key takeaways, summary, key concepts (term and explanation)                                                                                      |
+| Text content      | Overview, key takeaways, Details, key concepts (term and explanation)                                                                                      |
 | Quiz              | Exactly 5 questions, 4 options each, one correct answer, an explanation each                                                                               |
 | Images            | 0 to 3 contributor images, plus 0 or 1 AI diagram. Stored as WebP or the original allowed type.                                                            |
 | Package type rule | **With Visual** if the contributor attached at least one image. Otherwise **Text Only**.                                                                   |
@@ -214,7 +214,7 @@ Supabase Postgres, schema app, nine tables: learning_packages, package_content, 
 | 11  | Create a Package: Video Resource                | FR-5.3 to FR-5.7         |
 | 12  | Package, Learn tab                              | FR-7.1, FR-7.2           |
 | 13  | Package, Details tab                            | FR-7.1                   |
-| 14  | Viewer: Summary (also Key Concepts and Diagram) | FR-7.3, FR-7.4           |
+| 14  | Viewer: Details (also Key Concepts and Diagram) | FR-7.3, FR-7.4           |
 | 15  | Quiz                                            | FR-7.5                   |
 | 16  | Quiz result and Learnt                          | FR-7.6, FR-7.8           |
 | 17  | Review Answers                                  | FR-7.7                   |
@@ -297,7 +297,7 @@ Agree numeric targets for each before launch.
 
 | Term                    | Meaning                                                                                   |
 |-------------------------|-------------------------------------------------------------------------------------------|
-| Learning package        | The small offline unit: summary, key concepts, optional diagram and quiz for one resource |
+| Learning package        | The small offline unit: Details, key concepts, optional diagram and quiz for one resource |
 | Resource                | The original article or YouTube video a package is made from                              |
 | Text Only / With Visual | Package types without or with images                                                      |
 | Learnt                  | A package whose quiz has been passed                                                      |

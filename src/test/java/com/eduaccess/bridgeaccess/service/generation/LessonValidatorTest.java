@@ -18,8 +18,9 @@ import com.eduaccess.bridgeaccess.service.generation.LessonValidator.Validation;
 
 class LessonValidatorTest {
 
-	/** 120 words, inside the 80 to 180 the validator accepts. */
-	static final String SUMMARY = String.join(" ", java.util.Collections.nCopies(24, "Clean energy refills itself naturally."));
+	/** 320 words, inside the 280 to 450 the validator accepts. */
+	static final String SUMMARY = String.join("\n\n", java.util.Collections.nCopies(4,
+			String.join(" ", java.util.Collections.nCopies(16, "Clean energy refills itself naturally."))));
 
 	private final LessonValidator validator = new LessonValidator();
 
@@ -133,10 +134,12 @@ class LessonValidatorTest {
 
 	@Test
 	void summaryLengthAllowsSomeSlackButNotOneLinersOrEssays() {
-		assertThat(summaryProblems(words(80))).isEmpty();
-		assertThat(summaryProblems(words(180))).isEmpty();
-		assertThat(summaryProblems(words(79))).containsExactly("summary is 79 words; write 100 to 150 words");
-		assertThat(summaryProblems(words(181))).containsExactly("summary is 181 words; write 100 to 150 words");
+		assertThat(summaryProblems(words(280))).isEmpty();
+		assertThat(summaryProblems(words(450))).isEmpty();
+		assertThat(summaryProblems(words(279)))
+			.containsExactly("summary is 279 words; write 300 to 400 words in four clear paragraphs");
+		assertThat(summaryProblems(words(451)))
+			.containsExactly("summary is 451 words; write 300 to 400 words in four clear paragraphs");
 		assertThat(summaryProblems("Renewable energy refills naturally.")).hasSize(1);
 	}
 
@@ -147,6 +150,18 @@ class LessonValidatorTest {
 				+ "ကမ္ဘာကိုသန့်ရှင်းစေသည်".repeat(4);
 
 		assertThat(summaryProblems(burmese)).isEmpty();
+	}
+
+	@Test
+	void detailsMustHaveFourReadableParagraphs() {
+		List<String> problems = new ArrayList<>();
+		LessonValidator.checkSummaryParagraphs(SUMMARY, problems);
+		assertThat(problems).isEmpty();
+
+		problems.clear();
+		LessonValidator.checkSummaryParagraphs("Only one long block of text.", problems);
+		assertThat(problems).containsExactly(
+				"summary has 1 paragraphs; write exactly 4 clear paragraphs separated by blank lines");
 	}
 
 	@Test

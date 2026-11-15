@@ -27,7 +27,7 @@ export class ApiError extends Error {
   /** Contract error code, e.g. NOT_FOUND or VALIDATION_FAILED (API doc, section 10). */
   readonly code?: string
   readonly details?: ApiErrorDetail[]
-  /** Code-specific fields of the error, e.g. existingPackageId on DUPLICATE_LINK, resetsAt on DAILY_LIMIT_REACHED. */
+  /** Code-specific fields of the error, e.g. existingPackageId on DUPLICATE_LINK, resetsAt on HOURLY_LIMIT_REACHED. */
   readonly extras: Record<string, unknown>
   readonly requestId: string
 

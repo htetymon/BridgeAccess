@@ -38,6 +38,11 @@ class BuiltInPackageSeederIntegrationTest extends PostgresIntegrationTest {
 		assertThat(count("select count(*) from app.quiz_questions q "
 				+ "join app.learning_packages p on p.id = q.package_id where p.id::text like '" + PREFIX + "%'"))
 			.isEqualTo(30);
+		assertThat(count("select count(*) from app.package_content c "
+				+ "join app.learning_packages p on p.id = c.package_id where p.id::text like '" + PREFIX + "%' "
+				+ "and array_length(regexp_split_to_array(trim(c.summary), '[[:space:]]+'), 1) between 280 and 450 "
+				+ "and length(c.summary) - length(replace(c.summary, E'\\n', '')) = 6"))
+			.isEqualTo(6);
 		assertThat(count("select count(*) from app.learning_packages "
 				+ "where id::text like '" + PREFIX + "%' and package_type = 'with_visual'"))
 			.isEqualTo(1);

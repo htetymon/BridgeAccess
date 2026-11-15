@@ -87,7 +87,7 @@ Every non-2xx response has this shape:
 |---|---|---|
 | All endpoints, per device (`X-Device-Id`) | 120 requests per minute | `429 RATE_LIMITED` with `Retry-After` (seconds) |
 | All endpoints, per IP address | 1,200 requests per minute (many devices can share one address: a school network, a mobile carrier) | `429 RATE_LIMITED` with `Retry-After` |
-| `POST /packages`, per device | 5 per day (server-configurable, FR-5.10) | `429 DAILY_LIMIT_REACHED` |
+| `POST /packages`, per device | 5 in any rolling hour (server-configurable) | `429 HOURLY_LIMIT_REACHED` |
 
 The per-minute limits are token buckets: a short burst (opening the app, a sync) is fine, a sustained flood is not. All limits are server-configurable (`RATE_LIMIT_PER_DEVICE`, `RATE_LIMIT_PER_IP`).
 
@@ -113,13 +113,13 @@ The MVP has no accounts. On first launch the PWA generates a random UUID (`crypt
 | `status` (package) | `processing`, `published`, `failed` |
 | `imageSource` | `contributor`, `ai_diagram` |
 | `subject` | `Science`, `Health`, `Math`, `Technology`, `Language`, `History`, `Other` |
-| Learning `step` | `summary`, `key_concepts`, `diagram`, `quiz` |
+| Learning `step` | `summary` (shown as Details), `key_concepts`, `diagram`, `quiz` |
 | `downloadStatus` | `started`, `completed`, `failed` |
 | Sort | `latest_published` (Explore). Learn lists sort locally. |
 
 **Package type rule.** `with_visual` when the contributor attached at least one image, otherwise `text_only`. The database sets this automatically.
 
-**Learning steps.** `text_only` packages have 3 steps (`summary`, `key_concepts`, `quiz`). `with_visual` packages have 4 (adds `diagram`). The server returns the exact list in `steps`, and the client renders from it.
+**Learning steps.** `text_only` packages have 3 steps (`summary`, `key_concepts`, `quiz`). `with_visual` packages have 4 (adds `diagram`). The server returns the exact list in `steps`, and the client renders from it. The `summary` step and content field are presented as **Details** in the app; the stored names stay unchanged so existing offline bundles and saved progress keep working.
 
 **Image rules.** Up to 3 contributor images, 500 KB each, PNG, JPG, or WebP. The server re-encodes every image to WebP at about 80 KB or less. The AI diagram, when present, is position 0.
 
@@ -148,7 +148,7 @@ Runtime settings so the client never hard-codes values that the PRD marks as con
 ```json
 {
   "passMarkPercent": 60,
-  "dailyCreateLimit": 5,
+  "hourlyCreateLimit": 5,
   "maxImages": 3,
   "maxImageBytes": 512000,
   "maxContentChars": 10000,
@@ -651,12 +651,12 @@ Create a package from a text or video resource. Responds immediately with `202 A
 | 413 | `IMAGE_TOO_LARGE` | An image exceeds 500 KB. |
 | 415 | `UNSUPPORTED_IMAGE_TYPE` | Not PNG, JPG, or WebP. |
 | 422 | `TOO_MANY_IMAGES` | More than 3 images. |
-| 429 | `DAILY_LIMIT_REACHED` | The device reached its daily creation limit. Body adds `limit` and `resetsAt`. |
+| 429 | `HOURLY_LIMIT_REACHED` | The device created 5 packages in the last hour. Body adds `limit` and `resetsAt`, the time the oldest counted creation leaves the rolling window. |
 
 **What the job does** (server side, for reference)
 
 1. Use `content` if present. Otherwise, for a YouTube video, give the video itself to Gemini to watch; for any other link, fetch the page with SSRF protection. If the source cannot be read, fail with a message asking for pasted content. The AI never invents content (FR-6.3).
-2. Ask Gemini for: learner-friendly title, subject, overview, 3 to 5 key takeaways, a 100 to 150 word summary, 4 to 6 key concepts, and exactly 5 quiz questions with explanations. Write in the AI's own words, use only facts from the source (FR-6.1, FR-6.7).
+2. Ask Gemini for: learner-friendly title, subject, overview, 3 to 5 key takeaways, a 300 to 400 word Details lesson (API field `summary`) in four clear paragraphs, 4 to 6 key concepts, and exactly 5 quiz questions with explanations. Write in the AI's own words, use only facts from the source (FR-6.1, FR-6.7).
 3. Validate (question count, 4 options each, answer index, subject). On failure retry once, then mark `failed` (FR-6.4).
 4. Optimise images to WebP at about 80 KB or less (FR-6.5). If the package has images, generate one diagram. A diagram failure does not block publishing (FR-6.2, FR-6.6).
 5. Set `status = published`. The database refuses to publish unless content exists and the quiz has exactly 5 questions.
@@ -826,7 +826,7 @@ The request itself returns `400` only if the body is malformed, has more than 50
 | 415 | `UNSUPPORTED_IMAGE_TYPE` | Image is not PNG, JPG, or WebP. |
 | 416 | `RANGE_NOT_SATISFIABLE` | Bad `Range` header on an image. |
 | 422 | `TOO_MANY_IMAGES` | More than 3 images. |
-| 429 | `DAILY_LIMIT_REACHED` | Daily creation limit reached. |
+| 429 | `HOURLY_LIMIT_REACHED` | Five creations in the last hour; `resetsAt` gives the next available time. |
 | 429 | `RATE_LIMITED` | Too many requests. See `Retry-After`. |
 | 500 | `INTERNAL_ERROR` | Unexpected server error. Safe to retry reads. |
 | 503 | `SERVICE_UNAVAILABLE` | Server or AI service temporarily unavailable. Retry with backoff. |
@@ -930,7 +930,7 @@ These are the points where the PRD, the schema, and the designs leave room. The 
 | Create a Package (Video) | `GET /config` (cached) | `POST /packages` | No. Draft saved locally. |
 | Package, Learn tab | Local bundle, or `GET /packages/{id}` before download | Bookmark via outbox | Yes once downloaded |
 | Package, Details tab | Local bundle | none | Yes once downloaded |
-| Viewer (Summary, Key Concepts, Diagram) | Local bundle and images | `progress.upsert` via outbox | Yes |
+| Viewer (Details, Key Concepts, Diagram) | Local bundle and images | `progress.upsert` via outbox | Yes |
 | Quiz | Local bundle | none until submit | Yes |
 | Quiz result | Local attempt | `quiz.attempt.create` via outbox | Yes |
 | Review Answers | Local bundle and local attempt | none | Yes |

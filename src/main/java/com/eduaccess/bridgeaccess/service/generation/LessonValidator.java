@@ -17,8 +17,8 @@ import com.eduaccess.bridgeaccess.service.LessonPrompt;
 /**
  * Checks Gemini's lesson before it can be published (FR-6.4): exactly 5 questions, 4
  * different non-empty options each, an answer index from 0 to 3, an allowed subject, a
- * summary of roughly the asked length, and every field the database requires to be
- * present and within its counts.
+ * Details section (stored as summary) of roughly the asked length, and every field the
+ * database requires to be present and within its counts.
  *
  * <p>
  * The response schema already asks the API to enforce counts, the enum and the index range,
@@ -39,9 +39,9 @@ public class LessonValidator {
 	/** The prompt asks for 80; a little over is harmless, a paragraph is not a title. */
 	static final int MAX_TITLE_CHARS = 100;
 
-	static final int MIN_SUMMARY_WORDS = 80;
+	static final int MIN_SUMMARY_WORDS = 280;
 
-	static final int MAX_SUMMARY_WORDS = 180;
+	static final int MAX_SUMMARY_WORDS = 450;
 
 	/** Longer "words" on average mean the script does not separate words with spaces. */
 	static final double MAX_AVERAGE_WORD_CHARS = 15;
@@ -81,6 +81,7 @@ public class LessonValidator {
 		String overview = requireText(raw.overview(), "overview", problems);
 		String summary = requireText(raw.summary(), "summary", problems);
 		checkSummaryLength(summary, problems);
+		checkSummaryParagraphs(summary, problems);
 		List<String> takeaways = takeaways(raw.keyTakeaways(), problems);
 		List<KeyConcept> concepts = concepts(raw.keyConcepts(), problems);
 		List<QuizQuestion> quiz = quiz(raw.quiz(), problems);
@@ -91,10 +92,10 @@ public class LessonValidator {
 	}
 
 	/**
-	 * The prompt asks for 100 to 150 words; 80 to 180 passes, so a good lesson is not thrown
-	 * away over a few words, while a one-liner or an essay is. Skipped for text written
-	 * without spaces between words (Thai, Burmese, Chinese...), where splitting on spaces
-	 * cannot count words.
+	 * The prompt asks for 300 to 400 words of Details; 280 to 450 passes, so a good lesson is
+	 * not thrown away over a few words, while a short recap or an essay is. Skipped for text
+	 * written without spaces between words (Thai, Burmese, Chinese...), where splitting on
+	 * spaces cannot count words.
 	 */
 	static void checkSummaryLength(String summary, List<String> problems) {
 		if (summary.isEmpty()) {
@@ -105,7 +106,21 @@ public class LessonValidator {
 			return;
 		}
 		if (words < MIN_SUMMARY_WORDS || words > MAX_SUMMARY_WORDS) {
-			problems.add("summary is " + words + " words; write 100 to 150 words");
+			problems.add("summary is " + words + " words; write 300 to 400 words in four clear paragraphs");
+		}
+	}
+
+	/** The Details lesson has four short sections, separated by blank lines for easy reading. */
+	static void checkSummaryParagraphs(String summary, List<String> problems) {
+		if (summary.isBlank()) {
+			return; // already reported as empty
+		}
+		long paragraphs = java.util.Arrays.stream(summary.split("\\n\\s*\\n"))
+			.map(String::strip)
+			.filter(part -> !part.isEmpty())
+			.count();
+		if (paragraphs != 4) {
+			problems.add("summary has " + paragraphs + " paragraphs; write exactly 4 clear paragraphs separated by blank lines");
 		}
 	}
 

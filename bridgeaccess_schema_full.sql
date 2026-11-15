@@ -213,7 +213,7 @@ create index idx_lp_search_trgm
   on app.learning_packages using gin (search_text extensions.gin_trgm_ops)
   where status = 'published' and deleted_at is null;
 
--- My Contributions + daily creation rate limit (5 per device per day). FR-5.1, FR-5.10
+-- My Contributions + rolling creation rate limit (5 per device per hour). FR-5.1
 create index idx_lp_device_created
   on app.learning_packages (device_id, created_at desc);
 

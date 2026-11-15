@@ -10,7 +10,7 @@ import { latestAttempt } from '../lib/quiz'
 import { useLiveQuery } from '../lib/useLiveQuery'
 
 const STEP_LABEL: Record<LearningStep, string> = {
-  summary: 'Summary',
+  summary: 'Details',
   key_concepts: 'Key Concepts',
   diagram: 'Diagram',
   quiz: 'Quiz',
@@ -291,7 +291,7 @@ function StepContent({ step, bundle, images }: { step: LearningStep; bundle: Pac
   return null // the quiz is rendered by QuizStep
 }
 
-/** The summary is plain text; blank lines separate paragraphs. */
+/** The Details text is plain text; blank lines separate paragraphs. */
 function paragraphs(text: string): string[] {
   return text
     .split(/\n\s*\n/)

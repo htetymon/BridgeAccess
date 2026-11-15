@@ -3,8 +3,6 @@ package com.eduaccess.bridgeaccess.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -33,9 +31,9 @@ import com.eduaccess.bridgeaccess.storage.ImageStore;
  * Order of checks:
  * <ol>
  * <li>Input rules (400, 422, 413, 415), no database access.</li>
- * <li>Duplicate link (409). Before the daily limit, so a client retrying its own timed-out
+ * <li>Duplicate link (409). Before the hourly limit, so a client retrying its own timed-out
  * request gets {@code isOwn: true} and follows the package instead of seeing a 429.</li>
- * <li>Daily limit (429), read without a lock to fail fast.</li>
+ * <li>Hourly limit (429), read without a lock to fail fast.</li>
  * <li>Images are stored, then one transaction locks the device, re-counts and inserts. The
  * lock closes the race between parallel requests; the unique index {@code uq_lp_live_link}
  * closes the race on the link. If the transaction fails, stored images are deleted.</li>
@@ -81,18 +79,17 @@ public class ContributionService {
 	public CreatedPackage create(UUID deviceId, String rawData, List<MultipartFile> files) {
 		NewPackage pkg = this.validator.validate(rawData, files);
 		rejectDuplicate(deviceId, pkg.resourceLink());
-		Instant dayStart = startOfUtcDay();
-		rejectOverLimit(this.repository.countCreatedSince(deviceId, dayStart));
+		rejectOverLimit(deviceId);
 
 		UUID id = UUID.randomUUID();
-		Instant createdAt = insert(id, deviceId, pkg, dayStart);
+		Instant createdAt = insert(id, deviceId, pkg);
 		// Committed: hand it to the AI job. Never throws; a full queue leaves the package
 		// waiting for the sweeper, and the client gets its 202 either way.
 		this.generationDispatcher.submit(id);
 		return new CreatedPackage(id, createdAt);
 	}
 
-	private Instant insert(UUID id, UUID deviceId, NewPackage pkg, Instant dayStart) {
+	private Instant insert(UUID id, UUID deviceId, NewPackage pkg) {
 		List<String> stored = new ArrayList<>();
 		try {
 			List<NewImageRow> imageRows = new ArrayList<>();
@@ -106,7 +103,7 @@ public class ContributionService {
 
 			return this.transactions.execute(status -> {
 				this.repository.lockDevice(deviceId);
-				rejectOverLimit(this.repository.countCreatedSince(deviceId, dayStart));
+				rejectOverLimit(deviceId);
 				Instant created = this.repository.insertPackage(new NewPackageRow(id, deviceId, pkg.resourceType(),
 						pkg.originalTitle(), pkg.author(), pkg.resourceLink(), pkg.content()));
 				imageRows.forEach(this.repository::insertImage);
@@ -131,16 +128,15 @@ public class ContributionService {
 		});
 	}
 
-	private void rejectOverLimit(int createdToday) {
-		if (createdToday >= this.properties.dailyLimit()) {
-			Instant resetsAt = startOfUtcDay().plus(Duration.ofDays(1));
-			throw ApiException.dailyLimitReached(this.properties.dailyLimit(), resetsAt);
+	private void rejectOverLimit(UUID deviceId) {
+		Instant windowStart = this.clock.instant().minus(Duration.ofHours(1));
+		int createdInWindow = this.repository.countCreatedAfter(deviceId, windowStart);
+		if (createdInWindow >= this.properties.hourlyLimit()) {
+			Instant resetsAt = this.repository.findOldestCreatedAfter(deviceId, windowStart)
+				.orElse(this.clock.instant())
+				.plus(Duration.ofHours(1));
+			throw ApiException.hourlyLimitReached(this.properties.hourlyLimit(), resetsAt);
 		}
-	}
-
-	/** The limit is per UTC calendar day: it resets for everyone at 00:00 UTC. */
-	private Instant startOfUtcDay() {
-		return LocalDate.now(this.clock.withZone(ZoneOffset.UTC)).atStartOfDay(ZoneOffset.UTC).toInstant();
 	}
 
 	private void deleteQuietly(List<String> paths) {

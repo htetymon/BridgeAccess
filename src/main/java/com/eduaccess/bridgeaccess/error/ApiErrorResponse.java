@@ -11,7 +11,7 @@ public record ApiErrorResponse(Error error) {
 
 	/**
 	 * {@code extras} are code-specific fields written alongside the standard ones, for example
-	 * {@code existingPackageId} on DUPLICATE_LINK or {@code resetsAt} on DAILY_LIMIT_REACHED.
+	 * {@code existingPackageId} on DUPLICATE_LINK or {@code resetsAt} on HOURLY_LIMIT_REACHED.
 	 */
 	@JsonInclude(JsonInclude.Include.NON_NULL)
 	public record Error(String code, String message, List<Detail> details, String requestId,

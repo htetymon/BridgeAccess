@@ -16,14 +16,14 @@ public class ContributionConfig {
 	/**
 	 * Server-configurable contribution settings.
 	 *
-	 * @param dailyLimit packages one device may create per UTC day (FR-5.10)
+	 * @param hourlyLimit packages one device may create in any rolling hour
 	 * @param maxAiAttempts Gemini calls one package may use across its first run and its retries
 	 * ({@code attempt_count}; a run makes 1 or 2). Once used up, retry answers 409 and the
-	 * contributor creates the package again, which counts toward the daily limit. Runs that fail
+	 * contributor creates the package again, which counts toward the hourly limit. Runs that fail
 	 * before Gemini (an unreadable link) use none.
 	 */
 	@ConfigurationProperties("bridgeaccess.contribution")
-	public record ContributionProperties(@DefaultValue("5") int dailyLimit, @DefaultValue("6") int maxAiAttempts) {
+	public record ContributionProperties(@DefaultValue("5") int hourlyLimit, @DefaultValue("6") int maxAiAttempts) {
 	}
 
 	/** Injectable time source, so day boundaries can be tested. */
