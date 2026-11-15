@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import type { LocalPackage } from '../lib/db'
 import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
-import { CheckIcon, ChevronRightIcon, FileTextIcon, PlayIcon, TrashIcon } from './Icons'
+import { BookmarkIcon, CheckIcon, ChevronRightIcon, FileTextIcon, PlayIcon, TrashIcon } from './Icons'
 
 type Props =
   | { variant: 'continue'; pkg: LocalPackage; percent: number }
   | { variant: 'download'; pkg: LocalPackage; learnt: boolean; onDelete: (id: string) => Promise<void> }
+  | { variant: 'bookmark'; pkg: LocalPackage; learnt: boolean; onUnbookmark: (pkg: LocalPackage) => void }
 
 /**
  * A package stored on this device (Home and Learn). Rendered from IndexedDB only, so it works
@@ -14,6 +15,8 @@ type Props =
  *
  * - continue: chips, size, a progress bar and a chevron (FR-2.2).
  * - download: chips, a Learnt badge, size and Delete with an inline confirmation (FR-2.3, FR-3.3).
+ * - bookmark: chips, Downloaded and Learnt badges, size and Remove bookmark (FR-7.10). No
+ *   confirmation: bookmarking again from the package screen undoes it.
  */
 export default function LocalPackageCard(props: Props) {
   const { pkg } = props
@@ -48,7 +51,12 @@ export default function LocalPackageCard(props: Props) {
         <ul className="chips" aria-label="Details">
           <li className="chip">{pkg.subject}</li>
           <li className="chip">{PACKAGE_TYPE_LABEL[pkg.packageType]}</li>
-          {props.variant === 'download' && props.learnt && (
+          {props.variant === 'bookmark' && pkg.downloadStatus === 'downloaded' && (
+            <li className="chip chip--success">
+              <CheckIcon size={14} /> Downloaded
+            </li>
+          )}
+          {props.variant !== 'continue' && props.learnt && (
             <li className="chip chip--success">
               <CheckIcon size={14} /> Learnt
             </li>
@@ -85,6 +93,15 @@ export default function LocalPackageCard(props: Props) {
         <span className="local-package__size">{formatBytes(pkg.sizeBytes)}</span>
         {props.variant === 'continue' ? (
           <ChevronRightIcon size={20} />
+        ) : props.variant === 'bookmark' ? (
+          <button
+            type="button"
+            className="icon-button package-card__action local-package__bookmark"
+            onClick={() => props.onUnbookmark(pkg)}
+            aria-label={`Remove bookmark: ${pkg.title}`}
+          >
+            <BookmarkIcon filled />
+          </button>
         ) : (
           !confirming && (
             <button

@@ -120,10 +120,9 @@ async function attempt(packageId: string, options: DownloadOptions): Promise<Dow
   if (!bundlePart) throw new ApiError({ kind: 'http', message: FAILED_MESSAGE, requestId: randomUuid() })
   const imageParts = manifest.parts.filter((p) => p.kind === 'image')
 
-  const [storedBundle, storedImages, storedPackage] = await Promise.all([
+  const [storedBundle, storedImages] = await Promise.all([
     store.bundles.get(packageId),
     store.images.where('packageId').equals(packageId).toArray(),
-    store.packages.get(packageId),
   ])
   const storedImageEtags = new Map(storedImages.map((i) => [i.id, i.etag]))
   const bundleCurrent = storedBundle?.etag !== undefined && sameEtag(storedBundle.etag, bundlePart.etag)
@@ -156,18 +155,23 @@ async function attempt(packageId: string, options: DownloadOptions): Promise<Dow
   // Visible as "downloading" while images arrive. An update of a downloaded package keeps
   // its old copy usable, so it stays "downloaded" until the new one is complete.
   const meta = bundle.package
-  const row: LocalPackage = {
-    ...storedPackage,
-    id: packageId,
-    title: meta.title,
-    subject: meta.subject,
-    resourceType: meta.resourceType,
-    packageType: meta.packageType,
-    sizeBytes: meta.sizeBytes,
-    publishedAt: meta.publishedAt,
-    downloadStatus: storedPackage?.downloadStatus === 'downloaded' ? 'downloaded' : 'downloading',
-  }
-  await store.packages.put(row)
+  // Re-read inside the transaction: the row may have changed since the download started
+  // (a bookmark added meanwhile must not be overwritten).
+  await store.transaction('rw', store.packages, async () => {
+    const current = await store.packages.get(packageId)
+    const row: LocalPackage = {
+      ...current,
+      id: packageId,
+      title: meta.title,
+      subject: meta.subject,
+      resourceType: meta.resourceType,
+      packageType: meta.packageType,
+      sizeBytes: meta.sizeBytes,
+      publishedAt: meta.publishedAt,
+      downloadStatus: current?.downloadStatus === 'downloaded' ? 'downloaded' : 'downloading',
+    }
+    await store.packages.put(row)
+  })
 
   const imageMeta = new Map(bundle.images.map((i) => [i.id, i]))
   for (const part of missingImages) {

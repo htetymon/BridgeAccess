@@ -2328,3 +2328,18 @@ button {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* -------------------------------------------------------------- bookmarks */
+
+.package-screen__bar {
+  justify-content: space-between;
+}
+
+.package-screen__bookmark {
+  margin-right: -8px;
+}
+
+.package-screen__bookmark--on,
+.local-package__bookmark {
+  color: var(--color-primary);
+}

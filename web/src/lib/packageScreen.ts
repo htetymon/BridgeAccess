@@ -34,6 +34,8 @@ export type PackageView = {
   downloadedAt?: string
   downloaded: boolean
   learnt: boolean
+  /** Bookmarked on this device (FR-7.10). */
+  bookmarked: boolean
   /** The latest quiz attempt on this device (FR-7.6), shown as the quiz result. */
   latest?: LocalQuizAttempt
   /** Remote cover URL; a downloaded package's cover is a stored blob instead (see coverBlob). */
@@ -89,6 +91,7 @@ export function fromBundle(bundle: PackageBundle, local: Local): PackageView {
     downloaded: true,
     learnt: Boolean(local.progress?.learntAt),
     latest: local.latest,
+    bookmarked: Boolean(local.pkg?.bookmarkedAt),
     coverUrl: first?.url ?? null,
     coverAlt: first?.altText ?? null,
   }
@@ -110,6 +113,7 @@ export function fromDetail(detail: PackageDetail, local: Local): PackageView {
     downloaded: false,
     learnt: Boolean(local.progress?.learntAt),
     latest: local.latest,
+    bookmarked: Boolean(local.pkg?.bookmarkedAt),
     coverUrl: detail.coverImageUrl,
     coverAlt: null,
   }

@@ -1,10 +1,11 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import BlobImage from '../components/BlobImage'
 import DownloadControl from '../components/DownloadControl'
 import { QuizResult } from '../components/QuizStep'
 import {
   BookIcon,
+  BookmarkIcon,
   CalendarIcon,
   CheckIcon,
   ChevronLeftIcon,
@@ -19,6 +20,7 @@ import {
   StorageIcon,
   UserIcon,
 } from '../components/Icons'
+import { toggleBookmark } from '../lib/bookmarks'
 import { formatBytes, formatDate, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
 import { usePackageScreen, type Cover, type PackageView } from '../lib/packageScreen'
 import { useOnline } from '../lib/useOnline'
@@ -47,7 +49,7 @@ export function Component() {
 
   return (
     <main className="screen package-screen">
-      <BackBar />
+      <BackBar view={state.status === 'ready' ? state.view : undefined} />
 
       {state.status === 'loading' && (
         <div className="package-screen__loading" role="status" aria-label="Loading package">
@@ -265,10 +267,25 @@ function Detail({ icon, label, value }: { icon: React.ReactNode; label: string; 
   )
 }
 
-/** Back to wherever the learner came from; to Learn when the screen was opened directly. */
-function BackBar() {
+/**
+ * Back to wherever the learner came from (to Learn when the screen was opened directly), and
+ * the bookmark toggle once the package is shown (FR-7.10). Bookmarking works offline.
+ */
+function BackBar({ view }: { view?: PackageView }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const [busy, setBusy] = useState(false)
+
+  async function toggle() {
+    if (!view) return
+    setBusy(true)
+    try {
+      await toggleBookmark(view)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="package-screen__bar">
       <button
@@ -279,6 +296,21 @@ function BackBar() {
       >
         <ChevronLeftIcon />
       </button>
+      {view && (
+        <button
+          type="button"
+          className={`icon-button package-screen__bookmark${view.bookmarked ? ' package-screen__bookmark--on' : ''}`}
+          aria-pressed={view.bookmarked}
+          aria-label="Bookmark"
+          onClick={toggle}
+          disabled={busy}
+        >
+          <BookmarkIcon filled={view.bookmarked} />
+        </button>
+      )}
+      <span className="visually-hidden" role="status">
+        {view ? (view.bookmarked ? 'Bookmarked' : '') : ''}
+      </span>
     </div>
   )
 }
