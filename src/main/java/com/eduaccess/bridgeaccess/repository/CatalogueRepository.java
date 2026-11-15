@@ -62,7 +62,7 @@ public class CatalogueRepository {
 				                where d.package_id = lp.id and d.device_id = :deviceId
 				                  and d.status = 'completed' and d.removed_at is null) as is_downloaded
 				  from app.learning_packages lp
-				 where """).append(VISIBLE);
+				 where """).append(" ").append(VISIBLE);
 
 		if (query.searchText() != null) {
 			// search_text is lower(title || original_title || author), trigram-indexed.
@@ -107,7 +107,7 @@ public class CatalogueRepository {
 				       cast(pc.key_concepts as text) as key_concepts
 				  from app.learning_packages lp
 				  join app.package_content pc on pc.package_id = lp.id
-				 where lp.id = :id and """ + VISIBLE;
+				 where lp.id = :id and """ + " " + VISIBLE;
 		List<BundleHead> rows = jdbc.query(sql, new MapSqlParameterSource("id", packageId), (rs, i) -> {
 			String packageType = rs.getString("package_type");
 			PackageBundle.Info info = new PackageBundle.Info(rs.getObject("id", UUID.class), rs.getString("title"),
@@ -158,7 +158,7 @@ public class CatalogueRepository {
 			select pi.id, pi.source::text as source, pi.position, pi.mime_type, pi.size_bytes, pi.storage_path
 			  from app.package_images pi
 			  join app.learning_packages lp on lp.id = pi.package_id
-			 where pi.package_id = :packageId and """ + VISIBLE;
+			 where pi.package_id = :packageId and """ + " " + VISIBLE;
 
 	/** Images of a published, not deleted package, in position order. */
 	public List<ImageFile> findImageFiles(UUID packageId) {

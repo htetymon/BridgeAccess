@@ -50,7 +50,7 @@ public class LearningProgressRepository {
 				   set completed_steps = excluded.completed_steps,
 				       last_step = coalesce(excluded.last_step, p.last_step),
 				       last_opened_at = excluded.last_opened_at
-				returning """ + COLUMNS;
+				returning """ + " " + COLUMNS;
 		MapSqlParameterSource params = new MapSqlParameterSource("deviceId", deviceId).addValue("packageId", packageId)
 			.addValue("steps", stepsLiteral)
 			.addValue("lastStep", lastStep)

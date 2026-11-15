@@ -11,12 +11,14 @@ import java.util.UUID;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Job bookkeeping on {@code app.learning_packages}. A package waiting for the job is
  * {@code processing} with {@code processing_started_at} null; claiming it sets
  * {@code processing_started_at}, which then serves as the claim token. Every write is a single
- * conditional statement, so concurrent workers, sweepers and instances cannot both win.
+ * conditional statement (publishing is one transaction over a locked row), so concurrent
+ * workers, sweepers and instances cannot both win.
  */
 @Repository
 public class GenerationRepository {
@@ -148,6 +150,56 @@ public class GenerationRepository {
 				 where id = :id and status = 'processing' and processing_started_at = :claimedAt""";
 		return this.jdbc.update(sql, new MapSqlParameterSource("id", packageId).addValue("reason", reason)
 			.addValue("claimedAt", OffsetDateTime.ofInstant(claimedAt, ZoneOffset.UTC))) == 1;
+	}
+
+	/**
+	 * Saves a validated lesson and publishes the package, in one transaction (FR-6.1, FR-6.6):
+	 * content, the five quiz questions, the AI title and subject, the size, then status
+	 * {@code published}. Only while the claim is current and the package is not deleted; the
+	 * row is locked first, so a timeout, retry or delete cannot interleave. The schema's
+	 * publish trigger refuses a package without content or without exactly five questions, so
+	 * a half-saved package can never become visible.
+	 *
+	 * @param lessonJson the validated lesson as JSON ({@code overview}, {@code keyTakeaways},
+	 * {@code summary}, {@code keyConcepts}, {@code quiz}); stored through Postgres JSON
+	 * functions, so no text needs escaping here
+	 * @return false if the claim is no longer current (nothing is written)
+	 */
+	@Transactional
+	public boolean publish(UUID packageId, Instant claimedAt, String title, String subject, String lessonJson,
+			int sizeBytes) {
+		MapSqlParameterSource params = claimParams(packageId, claimedAt).addValue("title", title)
+			.addValue("subject", subject)
+			.addValue("lesson", lessonJson)
+			.addValue("sizeBytes", sizeBytes);
+		List<UUID> claimed = this.jdbc.queryForList("""
+				select id from app.learning_packages
+				 where id = :packageId and status = 'processing' and processing_started_at = :claimedAt
+				   and deleted_at is null
+				   for update""", params, UUID.class);
+		if (claimed.isEmpty()) {
+			return false;
+		}
+		// A retried package may still have rows from an earlier run that failed before publishing.
+		this.jdbc.update("delete from app.quiz_questions where package_id = :packageId", params);
+		this.jdbc.update("delete from app.package_content where package_id = :packageId", params);
+		this.jdbc.update("""
+				insert into app.package_content (package_id, overview, key_takeaways, summary, key_concepts)
+				select :packageId, l->>'overview',
+				       array(select jsonb_array_elements_text(l->'keyTakeaways')),
+				       l->>'summary', l->'keyConcepts'
+				  from (select cast(:lesson as jsonb) as l) s""", params);
+		this.jdbc.update("""
+				insert into app.quiz_questions (package_id, position, question, options, correct_index, explanation)
+				select :packageId, q.ord, q.value->>'question',
+				       array(select jsonb_array_elements_text(q.value->'options')),
+				       (q.value->>'correctIndex')::smallint, q.value->>'explanation'
+				  from jsonb_array_elements(cast(:lesson as jsonb)->'quiz') with ordinality as q(value, ord)""", params);
+		int updated = this.jdbc.update("""
+				update app.learning_packages
+				   set title = :title, subject = :subject, package_size_bytes = :sizeBytes, status = 'published'
+				 where id = :packageId and status = 'processing' and processing_started_at = :claimedAt""", params);
+		return updated == 1;
 	}
 
 	/** Waiting packages, oldest first, that have not changed for at least {@code grace}. */
