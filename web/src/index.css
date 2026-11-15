@@ -1438,3 +1438,70 @@ button {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---------------------------------------------------- local package card */
+
+.local-package__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: var(--color-ink);
+}
+
+.local-package__size {
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.local-package__side .package-card__action {
+  margin: 0 -6px 0 0;
+}
+
+.local-package__progress progress {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--color-border);
+  accent-color: var(--color-primary);
+}
+
+.local-package__progress progress::-webkit-progress-bar {
+  background: var(--color-border);
+}
+
+.local-package__progress progress::-webkit-progress-value {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.local-package__progress progress::-moz-progress-bar {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.local-package__confirm {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+  font-size: 0.9375rem;
+}
+
+.local-package__confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.section__note {
+  margin: -4px 0 10px;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
