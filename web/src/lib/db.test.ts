@@ -32,7 +32,7 @@ afterEach(async () => {
 describe('schema', () => {
   it('creates every table', () => {
     expect(db.tables.map((t) => t.name).sort()).toEqual(
-      ['bundles', 'images', 'outbox', 'packages', 'progress', 'quizAttempts'].sort(),
+      ['bundles', 'images', 'meta', 'outbox', 'packages', 'progress', 'quizAttempts'].sort(),
     )
   })
 

@@ -1,4 +1,5 @@
 import { Outlet, ScrollRestoration, useNavigation } from 'react-router'
+import ConnectionBanner from '../components/ConnectionBanner'
 import UpdatePrompt from '../components/UpdatePrompt'
 
 /**
@@ -13,6 +14,7 @@ export default function RootLayout() {
   return (
     <div className="app">
       {loading && <div className="route-progress" role="progressbar" aria-label="Loading page" />}
+      <ConnectionBanner />
       <Outlet />
       <UpdatePrompt />
       <ScrollRestoration />

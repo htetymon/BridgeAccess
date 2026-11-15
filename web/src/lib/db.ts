@@ -13,6 +13,8 @@ import type { LearningStep, PackageBundle, PackageType, ResourceType, Subject } 
  * - progress:     learning progress per package. Kept when a download is deleted (FR-3.3).
  * - quizAttempts: finished quizzes, graded on the device (FR-7.5). Kept on delete too.
  * - outbox:       actions waiting to be sent to POST /sync (FR-8.2), oldest first.
+ * - meta:         small key/value settings the service worker needs too (it has no
+ *                 localStorage), such as the device ID for Background Sync. Added in v2.
  *
  * Timestamps are ISO 8601 UTC strings from `toISOString()`, the same form the API uses. That
  * fixed-width form sorts correctly as a string, so timestamp indexes order by time.
@@ -147,7 +149,13 @@ export type BridgeAccessDb = Dexie & {
   progress: EntityTable<LocalProgress, 'packageId'>
   quizAttempts: EntityTable<LocalQuizAttempt, 'id'>
   outbox: EntityTable<OutboxEntry, 'seq'>
+  meta: EntityTable<MetaEntry, 'key'>
 }
+
+export type MetaEntry = { key: string; value: string }
+
+/** meta key holding the device ID, read by the service worker's Background Sync. */
+export const META_DEVICE_ID = 'deviceId'
 
 /**
  * Index notes (the first entry of each schema string is the primary key):
@@ -170,6 +178,8 @@ export function createDb(name = DB_NAME): BridgeAccessDb {
     quizAttempts: 'id, packageId, [packageId+attemptedAt]',
     outbox: '++seq, &opId, type',
   })
+  // v2: meta table. Earlier tables are unchanged, so no upgrade() is needed.
+  db.version(2).stores({ meta: 'key' })
   return db
 }
 

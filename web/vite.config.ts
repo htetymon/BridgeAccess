@@ -39,8 +39,12 @@ export default defineConfig({
         // gzipped), so any screen opens offline, not only the ones already visited.
         // (manifest.webmanifest is added by the plugin itself.)
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        // Source image for icon generation only; never requested by the app.
-        globIgnores: ['logo.svg'],
+        // logo.svg: source image for icon generation only. sw-sync.js: loaded by the service
+        // worker itself (importScripts below), never by the page.
+        globIgnores: ['logo.svg', 'sw-sync.js'],
+        // Background Sync handler for the outbox (FR-8.2): sends queued changes when the
+        // connection returns, even with the app closed.
+        importScripts: ['sw-sync.js'],
         // Client-side routes (/learn, /packages/:id, ...) are served the cached index.html.
         navigateFallback: '/index.html',
         // API calls are never answered by the service worker. Package data is stored for

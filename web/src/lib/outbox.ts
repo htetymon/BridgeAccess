@@ -1,5 +1,6 @@
 import { db as appDb, type BridgeAccessDb, type OutboxEntry, type SyncOperation } from './db'
 import { randomUuid } from './deviceId'
+import { scheduleSync } from './sync'
 
 /**
  * Adds an action to the outbox for a later POST /sync (FR-8.2). Some actions replace unsent
@@ -32,4 +33,7 @@ export async function enqueue(op: SyncOperation, store: BridgeAccessDb = appDb):
     }
     await store.outbox.add(entry as OutboxEntry)
   })
+  // Send it soon (and via Background Sync if the app closes first). Only for the app's own
+  // database: a test database must not trigger real network work.
+  if (store === appDb) scheduleSync()
 }
