@@ -779,7 +779,11 @@ When a connection returns, the client sends everything waiting in its **outbox**
 | `rejected` | Permanent failure for that operation. Remove it from the outbox, and keep the local data. Do not retry. |
 | HTTP `5xx`, `429`, timeout, or no response | Keep every operation. Retry the whole request with exponential backoff. |
 
-The request itself returns `400` only if the body is malformed or over 50 operations.
+The request itself returns `400` only if the body is malformed, has more than 50 operations, or an operation has no `opId`. Nothing is applied in that case.
+
+- **Each operation stands alone.** There is no batch transaction. An operation follows exactly the rules of its equivalent call, and one that fails those rules (unknown package, invalid field, unknown `type`, malformed `payload`) is `rejected` with that call's error `code`, `message` and `details`. The operations after it still apply.
+- **Replays.** Resending a batch, or part of one, creates no duplicates and never un-completes a step: progress is merged (steps unioned, resume point only moves forward), a quiz attempt replayed with the same `id` is `ok` and returns the stored result without a second attempt, and bookmarks and downloads have one row per device and package.
+- **Temporary failures.** If the server fails in a way that may pass (database unavailable, timeout), the whole request fails with `5xx` and no results. Operations before the failure may already be applied; resending them is safe for the reasons above.
 
 ---
 
