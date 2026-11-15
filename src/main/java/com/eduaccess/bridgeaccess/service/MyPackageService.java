@@ -18,7 +18,10 @@ import com.eduaccess.bridgeaccess.error.ApiException;
 import com.eduaccess.bridgeaccess.error.ErrorCode;
 import com.eduaccess.bridgeaccess.repository.ContributionRepository;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository;
+import com.eduaccess.bridgeaccess.repository.MyPackageRepository.EditableSource;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository.OwnedPackage;
+import com.eduaccess.bridgeaccess.dto.PackageRequest;
+import com.eduaccess.bridgeaccess.service.CreatePackageValidator.PackageEdit;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository.PageQuery;
 import com.eduaccess.bridgeaccess.service.generation.GenerationDispatcher;
 
@@ -50,15 +53,18 @@ public class MyPackageService {
 
 	private final ObjectMapper objectMapper;
 
+	private final CreatePackageValidator validator;
+
 	public MyPackageService(MyPackageRepository repository, ContributionRepository contributionRepository,
 			GenerationDispatcher generationDispatcher, DeletedPackageCleaner cleaner, ContributionProperties properties,
-			ObjectMapper objectMapper) {
+			ObjectMapper objectMapper, CreatePackageValidator validator) {
 		this.repository = repository;
 		this.contributionRepository = contributionRepository;
 		this.generationDispatcher = generationDispatcher;
 		this.cleaner = cleaner;
 		this.properties = properties;
 		this.objectMapper = objectMapper;
+		this.validator = validator;
 	}
 
 	/**
@@ -107,6 +113,25 @@ public class MyPackageService {
 	 * package has used its Gemini budget ({@code maxAiAttempts}).
 	 */
 	public void retry(UUID deviceId, UUID packageId) {
+		retry(deviceId, packageId, null);
+	}
+
+	/**
+	 * What the contributor can fix before retrying a failed package (FR-5.8): the original
+	 * title, author, link and pasted content, as stored. 404 unless it is theirs and failed.
+	 */
+	public EditableSource editable(UUID deviceId, UUID packageId) {
+		return this.repository.findEditable(deviceId, packageId).orElseThrow(ApiException::notFound);
+	}
+
+	/**
+	 * {@link #retry(UUID, UUID)}, first applying the contributor's edits (for example the
+	 * article text after "We couldn't read this link"). The edits pass the same checks as
+	 * creating a package; the resource type and the images stay as they were.
+	 *
+	 * @param edit null to retry unchanged
+	 */
+	public void retry(UUID deviceId, UUID packageId, PackageRequest edit) {
 		OwnedPackage pkg = owned(deviceId, packageId);
 		if (!"failed".equals(pkg.view().status())) {
 			throw new ApiException(ErrorCode.NOT_RETRYABLE);
@@ -115,13 +140,21 @@ public class MyPackageService {
 		if (pkg.attemptCount() >= maxAttempts) {
 			throw new ApiException(ErrorCode.NOT_RETRYABLE, RETRIES_USED_UP);
 		}
+		EditableSource changes = null;
+		if (edit != null) {
+			PackageEdit clean = this.validator.validateEdit(pkg.view().resourceType(), edit);
+			changes = new EditableSource(pkg.view().resourceType(), clean.originalTitle(), clean.author(),
+					clean.resourceLink(), clean.content());
+		}
+		String link = changes == null ? pkg.resourceLink() : changes.resourceLink();
 		boolean reset;
 		try {
-			reset = this.repository.resetForRetry(deviceId, packageId, maxAttempts);
+			reset = changes == null ? this.repository.resetForRetry(deviceId, packageId, maxAttempts)
+					: this.repository.resetForRetry(deviceId, packageId, maxAttempts, changes);
 		}
 		catch (DuplicateKeyException ex) {
-			// Since this one failed, another live package took the same link (uq_lp_live_link).
-			this.contributionRepository.findLiveByLink(pkg.resourceLink()).ifPresent(owner -> {
+			// Another live package uses this link: taken since this one failed, or the edited link.
+			this.contributionRepository.findLiveByLink(link).ifPresent(owner -> {
 				throw ApiException.duplicateLink(owner.packageId(), owner.deviceId().equals(deviceId));
 			});
 			throw ex;

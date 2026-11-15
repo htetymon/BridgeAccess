@@ -1,5 +1,8 @@
 package com.eduaccess.bridgeaccess.error;
 
+import java.sql.SQLException;
+import java.sql.SQLNonTransientConnectionException;
+import java.sql.SQLTransientConnectionException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -11,9 +14,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -61,8 +66,44 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
 	@ExceptionHandler(Exception.class)
 	ResponseEntity<Object> handleUnexpected(Exception ex, WebRequest request) {
+		if (isDatabaseUnreachable(ex)) {
+			// A temporary condition, not a bug: 503 tells the client to try again (the web app
+			// retries safe requests itself), instead of a 500 that reads as "something broke".
+			log.warn("Database unreachable: {}", rootMessage(ex));
+			return ResponseEntity.status(ErrorCode.SERVICE_UNAVAILABLE.status())
+				.header(HttpHeaders.RETRY_AFTER, "5")
+				.body(ApiErrorResponse.of(ErrorCode.SERVICE_UNAVAILABLE, ErrorCode.SERVICE_UNAVAILABLE.defaultMessage(),
+						null, requestId(request)));
+		}
 		log.error("Unhandled exception", ex);
 		return body(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.defaultMessage(), null, request);
+	}
+
+	/**
+	 * No connection to the database could be had: network or DNS trouble, a TLS handshake cut
+	 * off, the pool timing out. These reach us wrapped in several layers (JDBC template,
+	 * transaction manager, Hibernate), so the whole cause chain is checked. SQLSTATE class 08
+	 * is "connection exception" in the SQL standard.
+	 */
+	static boolean isDatabaseUnreachable(Throwable ex) {
+		for (Throwable t = ex; t != null; t = t.getCause() == t ? null : t.getCause()) {
+			if (t instanceof DataAccessResourceFailureException || t instanceof CannotCreateTransactionException
+					|| t instanceof SQLTransientConnectionException || t instanceof SQLNonTransientConnectionException) {
+				return true;
+			}
+			if (t instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("08")) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static String rootMessage(Throwable ex) {
+		Throwable root = ex;
+		while (root.getCause() != null && root.getCause() != root) {
+			root = root.getCause();
+		}
+		return root.getClass().getSimpleName() + ": " + root.getMessage();
 	}
 
 	@Override

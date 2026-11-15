@@ -209,8 +209,9 @@ class SyncControllerTest {
 		org.mockito.BDDMockito.willThrow(new DataAccessResourceFailureException("down"))
 			.given(this.bookmarks)
 			.add(DEVICE, PKG);
-		sync(BOOKMARK).andExpect(status().isInternalServerError())
-			.andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"));
+		sync(BOOKMARK).andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.error.code").value("SERVICE_UNAVAILABLE"))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "5"));
 	}
 
 	@Test

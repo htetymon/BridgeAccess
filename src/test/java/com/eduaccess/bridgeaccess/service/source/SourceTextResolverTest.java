@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -12,6 +13,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 import com.eduaccess.bridgeaccess.repository.GenerationRepository.PackageSource;
+import com.eduaccess.bridgeaccess.service.generation.GenerationDeferredException;
 import com.eduaccess.bridgeaccess.service.generation.GenerationFailedException;
 import com.eduaccess.bridgeaccess.service.source.UnreadableLinkException.Reason;
 
@@ -58,6 +60,39 @@ class SourceTextResolverTest {
 				() -> this.resolver.resolve(new PackageSource(ID, "video", "Original", "Author", "https://youtu.be/abc", null)))
 			.isInstanceOf(GenerationFailedException.class)
 			.hasMessage("We couldn't read this video. Please paste the transcript and try again.");
+	}
+
+	@Test
+	void aNetworkOrSiteHiccupIsRetriedLaterInsteadOfFailing() throws Exception {
+		for (UnreadableLinkException hiccup : new UnreadableLinkException[] {
+				new UnreadableLinkException(Reason.NETWORK_ERROR, "unknown host www.honor.com"),
+				new UnreadableLinkException(Reason.TIMEOUT, "total timeout reached"),
+				UnreadableLinkException.httpStatus(503, "example.org"),
+				UnreadableLinkException.httpStatus(429, "example.org") }) {
+			willThrow(hiccup).given(this.linkReader).read(any());
+
+			assertThatThrownBy(() -> this.resolver.resolve(new PackageSource(ID, "text", "Original", "Author", "https://example.org/a", null)))
+				.as(hiccup.getMessage())
+				.isInstanceOf(GenerationDeferredException.class)
+				// Recorded only if it is still unreadable when the retry window ends.
+				.hasMessage("We couldn't read this link. Please paste the content and try again.");
+		}
+	}
+
+	@Test
+	void aPageThatCannotBeReadFailsAtOnce() throws Exception {
+		for (UnreadableLinkException permanent : new UnreadableLinkException[] {
+				UnreadableLinkException.httpStatus(404, "example.org"),
+				UnreadableLinkException.httpStatus(403, "example.org"),
+				new UnreadableLinkException(Reason.TOO_LITTLE_TEXT, "12 characters"),
+				new UnreadableLinkException(Reason.UNSUPPORTED_CONTENT_TYPE, "application/pdf") }) {
+			willThrow(permanent).given(this.linkReader).read(any());
+
+			assertThatThrownBy(() -> this.resolver.resolve(new PackageSource(ID, "text", "Original", "Author", "https://example.org/a", null)))
+				.as(permanent.getMessage())
+				.isInstanceOf(GenerationFailedException.class)
+				.isNotInstanceOf(GenerationDeferredException.class);
+		}
 	}
 
 }

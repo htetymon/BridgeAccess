@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { FileTextIcon, ImageIcon, InfoIcon, LinkIcon, PlayIcon, UploadIcon, XIcon } from '../components/Icons'
 import PageHeader from '../components/PageHeader'
-import { createPackage } from '../lib/api/contributions'
+import { createPackage, getEditablePackage, retryPackage } from '../lib/api/contributions'
+import { ApiError } from '../lib/api/client'
 import type { ResourceType } from '../lib/api/packages'
 import {
   clearDraft,
@@ -47,13 +48,20 @@ const TEXT_FIELDS: TextField[] = ['originalTitle', 'author', 'content', 'resourc
  *   corrected; Content is always checked live against 10,000 characters. A video link must
  *   be a single YouTube video. Bare links get https:// added. Server errors map back to the
  *   same fields, and a repeat of this device's own earlier submit counts as success.
+ *
+ * Edit and retry (/contribute/edit/:packageId, FR-5.8): the same form, filled with a failed
+ * package's fields, so the contributor can paste the content or fix the link before retrying.
+ * The resource type and images cannot change there, and nothing is kept as a local draft.
  */
 export function Component() {
   const navigate = useNavigate()
   const online = useOnline()
-  const [draft, setDraft] = useState<Draft>(loadDraft)
-  const [restored] = useState(() => !isEmptyDraft(draft))
+  const { packageId } = useParams()
+  const editing = packageId !== undefined
+  const [draft, setDraft] = useState<Draft>(() => (editing ? EMPTY_DRAFT : loadDraft()))
+  const [restored] = useState(() => !editing && !isEmptyDraft(draft))
   const [showRestored, setShowRestored] = useState(restored)
+  const [loading, setLoading] = useState<'loading' | 'ready' | string>(editing ? 'loading' : 'ready')
   const [images, setImages] = useState<Picked[]>([])
   const [preparing, setPreparing] = useState(false)
   const [preparingNote, setPreparingNote] = useState('')
@@ -71,11 +79,42 @@ export function Component() {
   // A YouTube link under Text Resource is almost always a wrong type choice.
   const looksLikeVideo = draft.resourceType === 'text' && isYouTubeLink(draft.resourceLink)
 
-  // Keep the draft on the device (debounced: typing should not write on every key).
+  // Keep the draft on the device (debounced: typing should not write on every key). Not when
+  // editing a failed package: its fields live on the server, and the draft is for new ones.
   useEffect(() => {
+    if (editing) return
     const t = setTimeout(() => saveDraft(draft), 400)
     return () => clearTimeout(t)
-  }, [draft])
+  }, [draft, editing])
+
+  // Edit and retry: fill the form with the failed package's fields.
+  useEffect(() => {
+    if (!packageId) return
+    const controller = new AbortController()
+    getEditablePackage(packageId, controller.signal).then(
+      (p) => {
+        setDraft({
+          resourceType: p.resourceType,
+          originalTitle: p.originalTitle,
+          author: p.author,
+          resourceLink: p.resourceLink,
+          content: p.content ?? '',
+        })
+        setLoading('ready')
+      },
+      (e: unknown) => {
+        if (controller.signal.aborted) return
+        setLoading(
+          e instanceof ApiError && e.status === 404
+            ? 'This package can no longer be edited. It may have been retried, published or deleted.'
+            : e instanceof ApiError
+              ? e.message
+              : 'Something went wrong. Please try again.',
+        )
+      },
+    )
+    return () => controller.abort()
+  }, [packageId])
 
   // Free image previews when they are removed or the screen closes.
   const previews = useRef(images)
@@ -114,6 +153,7 @@ export function Component() {
   }
 
   function setType(type: ResourceType) {
+    if (editing) return // fixed for a package that already exists
     const next = { ...draft, resourceType: type }
     setDraft(next)
     // Messages and the link rule depend on the type (Video Title; video must be YouTube).
@@ -205,15 +245,31 @@ export function Component() {
     }
     setSubmitting(true)
     try {
+      if (packageId) {
+        const { resourceType: _type, imageAltTexts: _alts, ...edit } = toNewPackage(ready)
+        await retryPackage(packageId, edit)
+        done(packageId)
+        return
+      }
       const created = await createPackage(
-        toNewPackage(ready, images.map((i) => i.alt)),
+        toNewPackage(
+          ready,
+          images.map((i) => i.alt),
+        ),
         images.map((i) => new File([i.blob], i.name, { type: i.blob.type })),
       )
       done(created.id)
     } catch (e) {
       const outcome = describeCreateError(e)
-      if (outcome.kind === 'created') {
+      if (outcome.kind === 'created' && !editing) {
         done(outcome.packageId)
+        return
+      }
+      if (outcome.kind === 'created') {
+        // Editing: the link belongs to another of this device's own packages, not to this retry.
+        setSubmitting(false)
+        setFormError({ message: 'You already have a package for this link.', existingPackageId: outcome.packageId })
+        showErrors({ resourceLink: 'This link is already in one of your packages.' })
         return
       }
       setSubmitting(false)
@@ -223,9 +279,9 @@ export function Component() {
     }
   }
 
-  function done(packageId: string) {
-    clearDraft()
-    navigate('/contribute', { replace: true, state: { created: packageId } })
+  function done(id: string) {
+    if (!editing) clearDraft()
+    navigate('/contribute', { replace: true, state: { created: id } })
   }
 
   function discardDraft() {
@@ -238,12 +294,31 @@ export function Component() {
 
   return (
     <main className="screen">
-      <title>Create a Package · BridgeAccess</title>
+      <title>{editing ? 'Edit and Retry · BridgeAccess' : 'Create a Package · BridgeAccess'}</title>
       <PageHeader
-        title="Create a Package"
-        subtitle="Share a learning package with the community."
+        title={editing ? 'Edit and Retry' : 'Create a Package'}
+        subtitle={
+          editing
+            ? 'Fix what went wrong, for example paste the content, then try again.'
+            : 'Share a learning package with the community.'
+        }
         back={{ fallback: '/contribute' }}
       />
+
+      {loading === 'loading' && (
+        <div className="package-screen__loading" role="status" aria-label="Loading package">
+          <div className="skeleton-line skeleton-line--title" />
+          <div className="skeleton-line skeleton-line--short" />
+        </div>
+      )}
+      {loading !== 'loading' && loading !== 'ready' && (
+        <div className="list-error" role="alert">
+          <p>{loading}</p>
+          <Link to="/contribute" className="button button--secondary">
+            Back to Contribute
+          </Link>
+        </div>
+      )}
 
       {showRestored && (
         <div className="notice" role="status">
@@ -266,238 +341,265 @@ export function Component() {
         </div>
       )}
 
-      <form className="form" onSubmit={submit} noValidate>
-        <fieldset className="field">
-          <legend className="field__label">
-            Resource Type <Required />
-          </legend>
-          <div className="type-options">
-            <TypeOption type="text" current={draft.resourceType} onChange={setType} icon={<FileTextIcon size={20} />}>
-              Text Resource
-            </TypeOption>
-            <TypeOption type="video" current={draft.resourceType} onChange={setType} icon={<PlayIcon size={20} />}>
-              Video Resource
-            </TypeOption>
-          </div>
-        </fieldset>
+      {loading === 'ready' && (
+        <form className="form" onSubmit={submit} noValidate>
+          <fieldset className="field">
+            <legend className="field__label">
+              Resource Type <Required />
+            </legend>
+            <div className="type-options">
+              <TypeOption
+                type="text"
+                current={draft.resourceType}
+                onChange={setType}
+                disabled={editing}
+                icon={<FileTextIcon size={20} />}
+              >
+                Text Resource
+              </TypeOption>
+              <TypeOption
+                type="video"
+                current={draft.resourceType}
+                onChange={setType}
+                disabled={editing}
+                icon={<PlayIcon size={20} />}
+              >
+                Video Resource
+              </TypeOption>
+            </div>
+          </fieldset>
 
-        <InputField
-          id={ids.originalTitle}
-          label={labels.title}
-          required
-          value={draft.originalTitle}
-          onChange={(v) => update('originalTitle', v)}
-          onBlur={() => blur('originalTitle')}
-          placeholder={draft.resourceType === 'video' ? 'Enter the title of the video' : 'Enter the original title'}
-          maxLength={LIMITS.titleChars}
-          error={errors.originalTitle}
-        />
-
-        <InputField
-          id={ids.author}
-          label={labels.author}
-          required
-          value={draft.author}
-          onChange={(v) => update('author', v)}
-          onBlur={() => blur('author')}
-          placeholder={draft.resourceType === 'video' ? 'Enter the channel name' : 'Enter the author'}
-          maxLength={LIMITS.authorChars}
-          error={errors.author}
-          autoComplete="off"
-        />
-
-        <div className="field">
-          <label className="field__label" htmlFor={ids.content}>
-            {labels.content} <span className="field__optional">(Optional)</span>
-          </label>
-          <textarea
-            id={ids.content}
-            className="input input--area"
-            rows={5}
-            value={draft.content}
-            onChange={(e) => update('content', e.target.value)}
-            placeholder={
-              draft.resourceType === 'video'
-                ? 'Paste the video transcript here'
-                : 'Paste the article or resource content here'
-            }
-            aria-invalid={Boolean(errors.content)}
-            aria-describedby={`${ids.content}-hint ${ids.content}-count${errors.content ? ` ${ids.content}-error` : ''}`}
+          <InputField
+            id={ids.originalTitle}
+            label={labels.title}
+            required
+            value={draft.originalTitle}
+            onChange={(v) => update('originalTitle', v)}
+            onBlur={() => blur('originalTitle')}
+            placeholder={draft.resourceType === 'video' ? 'Enter the title of the video' : 'Enter the original title'}
+            maxLength={LIMITS.titleChars}
+            error={errors.originalTitle}
           />
-          <div className="field__foot">
-            <span id={`${ids.content}-hint`} className="field__hint">
-              {draft.resourceType === 'video'
-                ? "Without a transcript we try the video page; if that doesn't work you'll be asked to paste one."
-                : 'Leave empty and we read the link. Paste the text if the page needs a login.'}
-            </span>
-            {/* Not cut off at the limit: a long paste stays visible, turns red and says how much to remove. */}
-            <span id={`${ids.content}-count`} className={`field__count field__count--${counter.state}`}>
-              {counter.text}
-            </span>
-          </div>
-          {/* Screen readers hear the count only near and over the limit, not on every key. */}
-          <span className="visually-hidden" aria-live="polite">
-            {counter.announce}
-          </span>
-          <FieldError id={`${ids.content}-error`} message={errors.content} />
-        </div>
 
-        <div className="field">
-          <div className="field__label-row">
-            <span className="field__label" id={`${ids.images}-label`}>
-              Add Visuals <span className="field__optional">(Optional)</span>
+          <InputField
+            id={ids.author}
+            label={labels.author}
+            required
+            value={draft.author}
+            onChange={(v) => update('author', v)}
+            onBlur={() => blur('author')}
+            placeholder={draft.resourceType === 'video' ? 'Enter the channel name' : 'Enter the author'}
+            maxLength={LIMITS.authorChars}
+            error={errors.author}
+            autoComplete="off"
+          />
+
+          <div className="field">
+            <label className="field__label" htmlFor={ids.content}>
+              {labels.content} <span className="field__optional">(Optional)</span>
+            </label>
+            <textarea
+              id={ids.content}
+              className="input input--area"
+              rows={5}
+              value={draft.content}
+              onChange={(e) => update('content', e.target.value)}
+              placeholder={
+                draft.resourceType === 'video'
+                  ? 'Paste the video transcript here'
+                  : 'Paste the article or resource content here'
+              }
+              aria-invalid={Boolean(errors.content)}
+              aria-describedby={`${ids.content}-hint ${ids.content}-count${errors.content ? ` ${ids.content}-error` : ''}`}
+            />
+            <div className="field__foot">
+              <span id={`${ids.content}-hint`} className="field__hint">
+                {draft.resourceType === 'video'
+                  ? "Without a transcript we try the video page; if that doesn't work you'll be asked to paste one."
+                  : 'Leave empty and we read the link. Paste the text if the page needs a login.'}
+              </span>
+              {/* Not cut off at the limit: a long paste stays visible, turns red and says how much to remove. */}
+              <span id={`${ids.content}-count`} className={`field__count field__count--${counter.state}`}>
+                {counter.text}
+              </span>
+            </div>
+            {/* Screen readers hear the count only near and over the limit, not on every key. */}
+            <span className="visually-hidden" aria-live="polite">
+              {counter.announce}
             </span>
-            <button
-              type="button"
-              className="icon-button icon-button--small"
-              aria-expanded={showVisualsHelp}
-              aria-controls={`${ids.images}-help`}
-              aria-label="About visuals"
-              onClick={() => setShowVisualsHelp((s) => !s)}
-            >
-              <InfoIcon size={18} />
-            </button>
+            <FieldError id={`${ids.content}-error`} message={errors.content} />
           </div>
-          {showVisualsHelp && (
-            <p id={`${ids.images}-help`} className="field__hint field__help">
-              Images make this a "With Visual" package and add a Diagram step. Large photos are made smaller on your
-              phone before uploading, to save data.
+
+          {editing ? (
+            <p className="notice" role="note">
+              <ImageIcon size={20} />
+              <span>Images stay as you added them. To change them, create a new package.</span>
             </p>
+          ) : (
+            <div className="field">
+              <div className="field__label-row">
+                <span className="field__label" id={`${ids.images}-label`}>
+                  Add Visuals <span className="field__optional">(Optional)</span>
+                </span>
+                <button
+                  type="button"
+                  className="icon-button icon-button--small"
+                  aria-expanded={showVisualsHelp}
+                  aria-controls={`${ids.images}-help`}
+                  aria-label="About visuals"
+                  onClick={() => setShowVisualsHelp((s) => !s)}
+                >
+                  <InfoIcon size={18} />
+                </button>
+              </div>
+              {showVisualsHelp && (
+                <p id={`${ids.images}-help`} className="field__hint field__help">
+                  Images make this a "With Visual" package and add a Diagram step. Large photos are made smaller on your
+                  phone before uploading, to save data.
+                </p>
+              )}
+
+              <div className="dropzone">
+                <div className="dropzone__art" aria-hidden="true">
+                  <ImageIcon size={32} />
+                </div>
+                <div className="dropzone__body">
+                  <p>
+                    {draft.resourceType === 'video'
+                      ? 'Add supporting images (e.g., key frame, diagram, summary)'
+                      : 'Add images (e.g., diagram, chart, illustration)'}
+                  </p>
+                  <button
+                    id={ids.images}
+                    type="button"
+                    className="button button--outline button--small"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={images.length >= LIMITS.maxImages || preparing}
+                    aria-describedby={`${ids.images}-rules${errors.images ? ` ${ids.images}-error` : ''}`}
+                  >
+                    <UploadIcon size={18} /> {preparing ? 'Preparing…' : 'Choose Images'}
+                  </button>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    hidden
+                    onChange={(e) => addImages(e.target.files)}
+                  />
+                </div>
+              </div>
+              <p id={`${ids.images}-rules`} className="field__hint">
+                Maximum {LIMITS.maxImages} images • Up to 500 KB per image (PNG, JPG, WebP)
+                {images.length > 0 && ` • ${images.length} of ${LIMITS.maxImages} added`}
+              </p>
+              <p className="field__hint" role="status" aria-live="polite">
+                {preparingNote}
+              </p>
+              <FieldError id={`${ids.images}-error`} message={errors.images} />
+
+              {images.length > 0 && (
+                <ul className="thumbs" aria-label="Chosen images">
+                  {images.map((image, i) => (
+                    <li key={image.key} className="thumb">
+                      <img src={image.previewUrl} alt="" className="thumb__img" />
+                      <div className="thumb__body">
+                        <p className="thumb__size">
+                          {formatBytes(image.blob.size)}
+                          {image.reencoded && image.originalBytes > image.blob.size && (
+                            <span> · made smaller from {formatBytes(image.originalBytes)}</span>
+                          )}
+                        </p>
+                        <input
+                          className="input input--small"
+                          value={image.alt}
+                          onChange={(e) =>
+                            setImages((all) =>
+                              all.map((x) => (x.key === image.key ? { ...x, alt: e.target.value } : x)),
+                            )
+                          }
+                          placeholder="Describe the image (optional)"
+                          aria-label={`Description of image ${i + 1}`}
+                          maxLength={300}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-button icon-button--small thumb__remove"
+                        onClick={() => removeImage(image.key)}
+                        aria-label={`Remove image ${i + 1}`}
+                      >
+                        <XIcon size={18} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
-          <div className="dropzone">
-            <div className="dropzone__art" aria-hidden="true">
-              <ImageIcon size={32} />
-            </div>
-            <div className="dropzone__body">
-              <p>
-                {draft.resourceType === 'video'
-                  ? 'Add supporting images (e.g., key frame, diagram, summary)'
-                  : 'Add images (e.g., diagram, chart, illustration)'}
-              </p>
-              <button
-                id={ids.images}
-                type="button"
-                className="button button--outline button--small"
-                onClick={() => fileInput.current?.click()}
-                disabled={images.length >= LIMITS.maxImages || preparing}
-                aria-describedby={`${ids.images}-rules${errors.images ? ` ${ids.images}-error` : ''}`}
-              >
-                <UploadIcon size={18} /> {preparing ? 'Preparing…' : 'Choose Images'}
-              </button>
+          <div className="field">
+            <label className="field__label" htmlFor={ids.resourceLink}>
+              Resource Link <Required />
+            </label>
+            <div className="input-with-icon">
+              <LinkIcon size={20} />
               <input
-                ref={fileInput}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                multiple
-                hidden
-                onChange={(e) => addImages(e.target.files)}
+                id={ids.resourceLink}
+                className="input"
+                type="url"
+                inputMode="url"
+                autoComplete="url"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={draft.resourceLink}
+                onChange={(e) => update('resourceLink', e.target.value)}
+                onBlur={() => blur('resourceLink')}
+                placeholder={labels.link}
+                required
+                aria-invalid={Boolean(errors.resourceLink)}
+                aria-describedby={
+                  [errors.resourceLink && `${ids.resourceLink}-error`, looksLikeVideo && `${ids.resourceLink}-suggest`]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
               />
             </div>
+            <FieldError id={`${ids.resourceLink}-error`} message={errors.resourceLink} />
+            {looksLikeVideo && (
+              <p id={`${ids.resourceLink}-suggest`} className="field__suggest">
+                <span>This looks like a YouTube video.</span>
+                <button type="button" className="field__suggest-action" onClick={() => setType('video')}>
+                  Switch to Video Resource
+                </button>
+              </p>
+            )}
           </div>
-          <p id={`${ids.images}-rules`} className="field__hint">
-            Maximum {LIMITS.maxImages} images • Up to 500 KB per image (PNG, JPG, WebP)
-            {images.length > 0 && ` • ${images.length} of ${LIMITS.maxImages} added`}
-          </p>
-          <p className="field__hint" role="status" aria-live="polite">
-            {preparingNote}
-          </p>
-          <FieldError id={`${ids.images}-error`} message={errors.images} />
 
-          {images.length > 0 && (
-            <ul className="thumbs" aria-label="Chosen images">
-              {images.map((image, i) => (
-                <li key={image.key} className="thumb">
-                  <img src={image.previewUrl} alt="" className="thumb__img" />
-                  <div className="thumb__body">
-                    <p className="thumb__size">
-                      {formatBytes(image.blob.size)}
-                      {image.reencoded && image.originalBytes > image.blob.size && (
-                        <span> · made smaller from {formatBytes(image.originalBytes)}</span>
-                      )}
-                    </p>
-                    <input
-                    className="input input--small"
-                    value={image.alt}
-                    onChange={(e) =>
-                      setImages((all) => all.map((x) => (x.key === image.key ? { ...x, alt: e.target.value } : x)))
-                    }
-                    placeholder="Describe the image (optional)"
-                    aria-label={`Description of image ${i + 1}`}
-                    maxLength={300}
-                  />
-                  </div>
-                  <button
-                    type="button"
-                    className="icon-button icon-button--small thumb__remove"
-                    onClick={() => removeImage(image.key)}
-                    aria-label={`Remove image ${i + 1}`}
-                  >
-                    <XIcon size={18} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="field">
-          <label className="field__label" htmlFor={ids.resourceLink}>
-            Resource Link <Required />
-          </label>
-          <div className="input-with-icon">
-            <LinkIcon size={20} />
-            <input
-              id={ids.resourceLink}
-              className="input"
-              type="url"
-              inputMode="url"
-              autoComplete="url"
-              autoCapitalize="none"
-              spellCheck={false}
-              value={draft.resourceLink}
-              onChange={(e) => update('resourceLink', e.target.value)}
-              onBlur={() => blur('resourceLink')}
-              placeholder={labels.link}
-              required
-              aria-invalid={Boolean(errors.resourceLink)}
-              aria-describedby={
-                [errors.resourceLink && `${ids.resourceLink}-error`, looksLikeVideo && `${ids.resourceLink}-suggest`]
-                  .filter(Boolean)
-                  .join(' ') || undefined
-              }
-            />
-          </div>
-          <FieldError id={`${ids.resourceLink}-error`} message={errors.resourceLink} />
-          {looksLikeVideo && (
-            <p id={`${ids.resourceLink}-suggest`} className="field__suggest">
-              <span>This looks like a YouTube video.</span>
-              <button type="button" className="field__suggest-action" onClick={() => setType('video')}>
-                Switch to Video Resource
-              </button>
+          {!online && (
+            <p id={`${ids.resourceType}-offline`} className="notice" role="status" tabIndex={-1} ref={offlineNote}>
+              <InfoIcon size={20} />
+              <span>You're offline. Creating a package needs a connection. Your draft is saved on this device.</span>
             </p>
           )}
-        </div>
 
-        {!online && (
-          <p id={`${ids.resourceType}-offline`} className="notice" role="status" tabIndex={-1} ref={offlineNote}>
-            <InfoIcon size={20} />
-            <span>You're offline. Creating a package needs a connection. Your draft is saved on this device.</span>
-          </p>
-        )}
-
-        <button
-          type="submit"
-          className="button button--primary button--block form__submit"
-          // aria-disabled rather than disabled when offline: the button stays focusable, so
-          // keyboard and screen-reader users reach it and hear why it does not work.
-          disabled={submitting || preparing}
-          aria-disabled={!online}
-          aria-describedby={online ? undefined : `${ids.resourceType}-offline`}
-        >
-          {submitting ? 'Uploading…' : online ? 'Create Package' : 'Create Package (needs a connection)'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            className="button button--primary button--block form__submit"
+            // aria-disabled rather than disabled when offline: the button stays focusable, so
+            // keyboard and screen-reader users reach it and hear why it does not work.
+            disabled={submitting || preparing}
+            aria-disabled={!online}
+            aria-describedby={online ? undefined : `${ids.resourceType}-offline`}
+          >
+            {submitting
+              ? editing
+                ? 'Retrying…'
+                : 'Uploading…'
+              : `${editing ? 'Retry Package' : 'Create Package'}${online ? '' : ' (needs a connection)'}`}
+          </button>
+        </form>
+      )}
     </main>
   )
 }
@@ -537,12 +639,14 @@ function TypeOption({
   onChange,
   icon,
   children,
+  disabled = false,
 }: {
   type: ResourceType
   current: ResourceType
   onChange: (t: ResourceType) => void
   icon: React.ReactNode
   children: React.ReactNode
+  disabled?: boolean
 }) {
   return (
     <label className={`type-option${current === type ? ' type-option--selected' : ''}`}>
@@ -551,6 +655,7 @@ function TypeOption({
         name="resourceType"
         value={type}
         checked={current === type}
+        disabled={disabled}
         onChange={() => onChange(type)}
         className="type-option__radio"
       />

@@ -114,6 +114,27 @@ public class CreatePackageValidator {
 		return new NewPackage(resourceType, title, author, link, content, List.copyOf(newImages));
 	}
 
+	/** The editable fields of a failed package, after the same checks as when creating. */
+	public record PackageEdit(String originalTitle, String author, String resourceLink, String content) {
+	}
+
+	/**
+	 * Checks an edit made before retrying a failed package, with exactly the rules of
+	 * {@link #validate}. The resource type cannot change (it decides which link is valid and
+	 * how the job reads it), so it is passed in from the stored package.
+	 */
+	public PackageEdit validateEdit(String resourceType, PackageRequest edit) {
+		List<Detail> errors = new ArrayList<>();
+		String title = text("originalTitle", edit.originalTitle(), MAX_TITLE_CHARS, true, errors);
+		String author = text("author", edit.author(), MAX_AUTHOR_CHARS, true, errors);
+		String link = link(edit.resourceLink(), "video".equals(resourceType), errors);
+		String content = text("content", edit.content(), MAX_CONTENT_CHARS, false, errors);
+		if (!errors.isEmpty()) {
+			throw ApiException.validation(errors);
+		}
+		return new PackageEdit(title, author, link, content);
+	}
+
 	private PackageRequest parse(String rawData) {
 		if (rawData == null || rawData.isBlank()) {
 			throw ApiException.validation(List.of(required("data")));

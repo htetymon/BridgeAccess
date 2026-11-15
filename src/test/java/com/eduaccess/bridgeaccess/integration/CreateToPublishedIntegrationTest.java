@@ -79,6 +79,40 @@ class CreateToPublishedIntegrationTest extends PostgresIntegrationTest {
 				Integer.class, id)).isZero();
 	}
 
+	@Test
+	void aFailedPackageCanBeEditedAndRetriedUntilItIsPublished() throws Exception {
+		GeneratedLesson good = lesson();
+		GeneratedLesson broken = new GeneratedLesson(good.title(), good.subject(), good.overview(),
+				good.keyTakeaways(), good.summary(), good.keyConcepts(), new ArrayList<>(good.quiz().subList(0, 4)));
+		given(this.gemini.generateLesson(any(), any())).willReturn(broken);
+		UUID id = contribute(DEVICE);
+		awaitFailure(id);
+
+		JsonNode editable = json(as(DEVICE, get("/api/v1/me/packages/" + id + "/edit")), 200);
+		assertThat(editable.get("author").asString()).isEqualTo("Laura Mitchell");
+
+		given(this.gemini.generateLesson(any(), any())).willReturn(good);
+		String pasted = "Pasted article text about renewable energy. ".repeat(10).strip();
+		json(as(DEVICE, org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+			.post("/api/v1/me/packages/" + id + "/retry")).contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+			.content(this.objectMapper.writeValueAsString(java.util.Map.of("originalTitle", "Renewable Energy 102",
+					"author", "L. Mitchell", "resourceLink", "https://example.org/re-102", "content", pasted))),
+				202);
+
+		awaitStatus(DEVICE, id, "published");
+		java.util.Map<String, Object> row = this.jdbc.queryForMap(
+				"select original_title, author, resource_link, source_content, package_type::text as type from app.learning_packages where id = ?",
+				id);
+		assertThat(row.get("original_title")).isEqualTo("Renewable Energy 102");
+		assertThat(row.get("author")).isEqualTo("L. Mitchell");
+		assertThat(row.get("resource_link")).isEqualTo("https://example.org/re-102");
+		assertThat(row.get("source_content")).isEqualTo(pasted);
+		assertThat(row.get("type")).isEqualTo("with_visual"); // the photo was kept
+		// Once published it is no longer editable.
+		this.mvc.perform(as(DEVICE, get("/api/v1/me/packages/" + id + "/edit")))
+			.andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isNotFound());
+	}
+
 	private JsonNode awaitFailure(UUID id) throws Exception {
 		for (int i = 0; i < 300; i++) {
 			JsonNode row = json(as(DEVICE, get("/api/v1/me/packages/" + id)), 200);

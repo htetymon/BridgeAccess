@@ -98,6 +98,48 @@ public class MyPackageRepository {
 	 * @return false unless it was this device's, not deleted, {@code failed} and within budget
 	 */
 	public boolean resetForRetry(UUID deviceId, UUID packageId, int maxAttempts) {
+		return resetForRetry(deviceId, packageId, maxAttempts, null);
+	}
+
+	/** What a contributor can change before retrying a failed package. */
+	public record EditableSource(String resourceType, String originalTitle, String author, String resourceLink,
+			String content) {
+	}
+
+	/** The editable fields of this device's failed, not deleted package. */
+	public Optional<EditableSource> findEditable(UUID deviceId, UUID packageId) {
+		String sql = """
+				select resource_type::text as resource_type, original_title, author, resource_link, source_content
+				  from app.learning_packages
+				 where id = :id and device_id = :deviceId and deleted_at is null and status = 'failed'""";
+		return this.jdbc
+			.query(sql, params(deviceId, packageId),
+					(rs, i) -> new EditableSource(rs.getString("resource_type"), rs.getString("original_title"),
+							rs.getString("author"), rs.getString("resource_link"), rs.getString("source_content")))
+			.stream()
+			.findFirst();
+	}
+
+	/**
+	 * {@link #resetForRetry(UUID, UUID, int)}, also saving the contributor's edits in the same
+	 * statement, so the job never sees half an edit. The images are kept.
+	 *
+	 * @param edit null to retry unchanged
+	 */
+	public boolean resetForRetry(UUID deviceId, UUID packageId, int maxAttempts, EditableSource edit) {
+		if (edit != null) {
+			String sql = """
+					update app.learning_packages
+					   set status = 'processing', failure_reason = null, processing_started_at = null,
+					       original_title = :title, author = :author, resource_link = :link, source_content = :content
+					 where id = :id and device_id = :deviceId and deleted_at is null and status = 'failed'
+					   and attempt_count < :maxAttempts""";
+			return this.jdbc.update(sql, params(deviceId, packageId).addValue("maxAttempts", maxAttempts)
+				.addValue("title", edit.originalTitle())
+				.addValue("author", edit.author())
+				.addValue("link", edit.resourceLink())
+				.addValue("content", edit.content())) == 1;
+		}
 		String sql = """
 				update app.learning_packages
 				   set status = 'processing', failure_reason = null, processing_started_at = null

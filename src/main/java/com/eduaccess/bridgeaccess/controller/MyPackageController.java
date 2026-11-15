@@ -9,13 +9,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.eduaccess.bridgeaccess.dto.MyPackage;
+import com.eduaccess.bridgeaccess.dto.PackageRequest;
 import com.eduaccess.bridgeaccess.dto.PageResponse;
 import com.eduaccess.bridgeaccess.filter.DeviceIdFilter;
+import com.eduaccess.bridgeaccess.repository.MyPackageRepository.EditableSource;
 import com.eduaccess.bridgeaccess.service.MyPackageService;
 
 /**
@@ -61,10 +64,23 @@ public class MyPackageController {
 			.body(this.service.get(deviceId, packageId));
 	}
 
+	/** A failed package's editable fields, to pre-fill "Edit and retry". 404 unless failed and owned. */
+	@GetMapping("/{packageId}/edit")
+	public ResponseEntity<EditableSource> editable(@RequestAttribute(DeviceIdFilter.REQUEST_ATTRIBUTE) UUID deviceId,
+			@PathVariable UUID packageId) {
+		return ResponseEntity.ok()
+			.cacheControl(CacheControl.noStore())
+			.body(this.service.editable(deviceId, packageId));
+	}
+
+	/**
+	 * Re-runs a failed package. An optional JSON body ({@code originalTitle}, {@code author},
+	 * {@code resourceLink}, {@code content}) saves the contributor's edits first.
+	 */
 	@PostMapping("/{packageId}/retry")
 	public ResponseEntity<RetryResponse> retry(@RequestAttribute(DeviceIdFilter.REQUEST_ATTRIBUTE) UUID deviceId,
-			@PathVariable UUID packageId) {
-		this.service.retry(deviceId, packageId);
+			@PathVariable UUID packageId, @RequestBody(required = false) PackageRequest edit) {
+		this.service.retry(deviceId, packageId, edit);
 		return ResponseEntity.accepted().body(new RetryResponse(packageId, "processing"));
 	}
 

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,6 +31,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -38,16 +41,18 @@ import com.eduaccess.bridgeaccess.filter.DeviceIdFilter;
 import com.eduaccess.bridgeaccess.repository.ContributionRepository;
 import com.eduaccess.bridgeaccess.repository.ContributionRepository.LinkOwner;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository;
+import com.eduaccess.bridgeaccess.repository.MyPackageRepository.EditableSource;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository.OwnedPackage;
 import com.eduaccess.bridgeaccess.repository.MyPackageRepository.PageQuery;
 import com.eduaccess.bridgeaccess.config.ContributionConfig.ContributionProperties;
+import com.eduaccess.bridgeaccess.service.CreatePackageValidator;
 import com.eduaccess.bridgeaccess.service.DeletedPackageCleaner;
 import com.eduaccess.bridgeaccess.service.MyPackageService;
 import com.eduaccess.bridgeaccess.service.generation.GenerationDispatcher;
 import com.eduaccess.bridgeaccess.storage.ImageStore;
 
 @WebMvcTest(MyPackageController.class)
-@Import({ MyPackageService.class, DeletedPackageCleaner.class, MyPackageControllerTest.Config.class })
+@Import({ MyPackageService.class, DeletedPackageCleaner.class, CreatePackageValidator.class, MyPackageControllerTest.Config.class })
 class MyPackageControllerTest {
 
 	private static final UUID DEVICE = UUID.fromString("11111111-2222-4333-8444-555555555555");
@@ -298,6 +303,69 @@ class MyPackageControllerTest {
 	}
 
 	// ------------------------------------------------------------------ helpers
+
+	// ------------------------------------------------------- edit and retry
+
+	@Test
+	void theEditableFieldsOfAFailedPackageCanBeRead() throws Exception {
+		given(this.repository.findEditable(DEVICE, ID))
+			.willReturn(Optional.of(new EditableSource("text", "RAM and ROM", "HONOR Club", LINK, null)));
+
+		as(DEVICE, get("/api/v1/me/packages/" + ID + "/edit")).andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-store"))
+			.andExpect(jsonPath("$.resourceType").value("text"))
+			.andExpect(jsonPath("$.originalTitle").value("RAM and ROM"))
+			.andExpect(jsonPath("$.resourceLink").value(LINK))
+			.andExpect(jsonPath("$.content").doesNotExist());
+
+		as(OTHER_DEVICE, get("/api/v1/me/packages/" + ID + "/edit")).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void retryWithEditsSavesThemTidiedAndQueuesThePackage() throws Exception {
+		owned("failed", "We couldn't read this link. Please paste the content and try again.");
+		given(this.repository.resetForRetry(eq(DEVICE), eq(ID), eq(6), any())).willReturn(true);
+
+		as(DEVICE, post("/api/v1/me/packages/" + ID + "/retry").contentType(MediaType.APPLICATION_JSON).content("""
+				{"originalTitle":"  RAM and ROM  ","author":"HONOR Club","resourceLink":" https://example.org/ram ",
+				 "content":"  RAM is the phone's working memory.  "}"""))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.status").value("processing"));
+
+		ArgumentCaptor<EditableSource> saved = ArgumentCaptor.forClass(EditableSource.class);
+		verify(this.repository).resetForRetry(eq(DEVICE), eq(ID), eq(6), saved.capture());
+		assertThat(saved.getValue()).isEqualTo(new EditableSource("text", "RAM and ROM", "HONOR Club",
+				"https://example.org/ram", "RAM is the phone's working memory."));
+		verify(this.dispatcher).submit(ID);
+	}
+
+	@Test
+	void editsAreCheckedLikeANewPackageAndNothingIsSavedWhenInvalid() throws Exception {
+		owned("failed", "x");
+
+		as(DEVICE, post("/api/v1/me/packages/" + ID + "/retry").contentType(MediaType.APPLICATION_JSON)
+			.content("{\"originalTitle\":\" \",\"author\":\"A\",\"resourceLink\":\"ftp://x\",\"content\":\"" + "y".repeat(10_001)
+					+ "\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.error.details[*].field", containsInAnyOrder("originalTitle", "resourceLink", "content")));
+
+		verify(this.repository, never()).resetForRetry(any(), any(), anyInt(), any());
+		verifyNoInteractions(this.dispatcher);
+	}
+
+	@Test
+	void anEditedLinkThatAnotherLivePackageUsesIsADuplicate() throws Exception {
+		owned("failed", "x");
+		given(this.repository.resetForRetry(eq(DEVICE), eq(ID), eq(6), any())).willThrow(new DuplicateKeyException("uq"));
+		given(this.contributionRepository.findLiveByLink("https://example.org/taken"))
+			.willReturn(Optional.of(new LinkOwner(OTHER_PACKAGE, OTHER_DEVICE)));
+
+		as(DEVICE, post("/api/v1/me/packages/" + ID + "/retry").contentType(MediaType.APPLICATION_JSON)
+			.content("{\"originalTitle\":\"T\",\"author\":\"A\",\"resourceLink\":\"https://example.org/taken\"}"))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.error.code").value("DUPLICATE_LINK"))
+			.andExpect(jsonPath("$.error.existingPackageId").value(OTHER_PACKAGE.toString()));
+	}
 
 	private void owned(String status, String failureReason) {
 		owned(status, failureReason, 2);

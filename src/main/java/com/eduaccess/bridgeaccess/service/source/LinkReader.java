@@ -126,7 +126,7 @@ public class LinkReader implements DisposableBean {
 					continue;
 				}
 				if (status < 200 || status >= 300) {
-					throw new UnreadableLinkException(Reason.HTTP_STATUS, status + " from " + uri.getHost());
+					throw UnreadableLinkException.httpStatus(status, uri.getHost());
 				}
 				return text(uri, response.getEntity(), deadline);
 			}

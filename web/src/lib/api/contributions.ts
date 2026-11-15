@@ -59,10 +59,30 @@ export function getMyPackage(packageId: string, signal?: AbortSignal) {
   return apiRequest<MyPackage>(`/me/packages/${encodeURIComponent(packageId)}`, { signal })
 }
 
-/** Safe to repeat: a second retry of the same package answers NOT_RETRYABLE. */
-export function retryPackage(packageId: string) {
+/** What can be changed before retrying a failed package (GET /me/packages/{id}/edit). */
+export type EditablePackage = {
+  resourceType: ResourceType
+  originalTitle: string
+  author: string
+  resourceLink: string
+  content: string | null
+}
+
+/** The fields of this device's failed package, to pre-fill Edit and retry. */
+export function getEditablePackage(packageId: string, signal?: AbortSignal) {
+  return apiRequest<EditablePackage>(`/me/packages/${encodeURIComponent(packageId)}/edit`, { signal })
+}
+
+export type PackageEdit = Pick<NewPackage, 'originalTitle' | 'author' | 'resourceLink' | 'content'>
+
+/**
+ * Re-runs a failed package, first saving `edit` when given (the resource type and images stay).
+ * Safe to repeat: a second retry of the same package answers NOT_RETRYABLE.
+ */
+export function retryPackage(packageId: string, edit?: PackageEdit) {
   return apiRequest<{ id: string; status: 'processing' }>(`/me/packages/${encodeURIComponent(packageId)}/retry`, {
     method: 'POST',
+    body: edit,
   })
 }
 

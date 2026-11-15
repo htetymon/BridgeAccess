@@ -705,7 +705,20 @@ One of this device's packages in any status. Same item shape as the list. Poll t
 
 ### POST /me/packages/{packageId}/retry
 
-Re-run the AI job for a `failed` package you own. The stored content and images are reused. No body.
+Re-run the AI job for a `failed` package you own. The images are reused.
+
+Without a body, the stored fields are reused as they are (for a temporary failure). To fix the cause first, send the edited fields as JSON, for example the article text after "We couldn't read this link":
+
+```json
+{
+  "originalTitle": "What Is RAM and ROM in Mobile Phones?",
+  "author": "HONOR Club",
+  "resourceLink": "https://www.honor.com/uk/blog/what-is-ram-and-rom-in-mobile/",
+  "content": "RAM is the phone's working memory ..."
+}
+```
+
+The edit replaces all four fields (an empty or missing `content` means "read the link") and passes the same checks as `POST /packages`. The resource type and the images cannot change; create a new package for that. Edits and the reset happen in one statement, so the job never sees half an edit.
 
 **202 Accepted**
 
@@ -713,7 +726,13 @@ Re-run the AI job for a `failed` package you own. The stored content and images 
 { "id": "0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10", "status": "processing" }
 ```
 
-**Errors:** `404 NOT_FOUND`, `409 NOT_RETRYABLE` (status is not `failed`).
+**Errors:** `400 VALIDATION_FAILED` (an edited field is invalid), `404 NOT_FOUND`, `409 NOT_RETRYABLE` (status is not `failed`, or the package used its AI budget), `409 DUPLICATE_LINK` (another live package uses the link).
+
+### GET /me/packages/{packageId}/edit
+
+The editable fields of a `failed` package you own, to pre-fill the edit form: `resourceType`, `originalTitle`, `author`, `resourceLink`, `content` (the pasted text, or `null`). `404 NOT_FOUND` for any other status or someone else's package. `Cache-Control: no-store`.
+
+**Reading a link** (when no content was pasted): a page that cannot be read (403, 404, too little text, not HTML) fails the package at once with "We couldn't read this link…". A failure that may pass (timeout, DNS or connection error, 429, 5xx) puts the package back in the queue and is tried again for up to 30 minutes before it fails with the same message.
 
 ### DELETE /me/packages/{packageId}
 

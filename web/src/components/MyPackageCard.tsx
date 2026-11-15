@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import type { MyPackage } from '../lib/api/contributions'
 import type { RetryProblem } from '../lib/contribution'
 import { PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
-import { AlertIcon, CheckIcon, FileTextIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
+import { AlertIcon, EditIcon, CheckIcon, FileTextIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
 
 type Actions = {
   /** Resolves to null on success, or the problem to show. */
@@ -121,14 +121,24 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete,
                 </Link>
               </div>
             ) : (
-              <button
-                type="button"
-                className="button button--secondary button--small"
-                onClick={retry}
-                disabled={busy !== null}
-              >
-                <RefreshIcon size={18} /> {busy === 'retry' ? 'Retrying…' : 'Retry'}
-              </button>
+              <div className="my-package__next">
+                {/* Fix the cause first: paste the content, correct the link (FR-5.8). */}
+                <Link
+                  to={`/contribute/edit/${pkg.id}`}
+                  className="button button--secondary button--small"
+                  aria-disabled={busy !== null}
+                >
+                  <EditIcon size={18} /> Edit and retry
+                </Link>
+                <button
+                  type="button"
+                  className="button button--secondary button--small"
+                  onClick={retry}
+                  disabled={busy !== null}
+                >
+                  <RefreshIcon size={18} /> {busy === 'retry' ? 'Retrying…' : 'Retry'}
+                </button>
+              </div>
             )}
           </div>
         )}
