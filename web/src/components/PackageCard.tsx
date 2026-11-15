@@ -30,9 +30,7 @@ export default function PackageCard({ pkg }: { pkg: PackageSummary }) {
           <li className="chip">{pkg.subject}</li>
           <li className="chip">{PACKAGE_TYPE_LABEL[pkg.packageType]}</li>
         </ul>
-        <p className="package-card__meta">
-          <span>{formatBytes(pkg.sizeBytes)}</span>
-        </p>
+        <p className="package-card__meta">{formatBytes(pkg.sizeBytes)}</p>
         <DownloadControl packageId={pkg.id} title={pkg.title} sizeBytes={pkg.sizeBytes} />
       </div>
     </article>

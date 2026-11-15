@@ -192,6 +192,14 @@ function PackageBody({
 
           {view.latest && <QuizResult attempt={view.latest} />}
 
+          <p className="package-screen__size">
+            <StorageIcon size={18} />
+            <span>
+              Package size: <strong>{formatBytes(view.sizeBytes)}</strong>
+              {view.downloaded ? ' stored on this device' : ' to download'}
+            </span>
+          </p>
+
           <div className="package-screen__action">
             {view.downloaded ? (
               <Link to={`/packages/${view.id}/learn`} className="button button--primary button--block">

@@ -567,8 +567,10 @@ button {
 .package-card {
   position: relative;
   display: flex;
+  align-items: flex-start;
   gap: 14px;
-  padding: 14px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
@@ -603,6 +605,7 @@ button {
 }
 
 .package-card__title {
+  margin: 0;
   font-size: 1.0625rem;
   line-height: 1.3;
   font-weight: 700;
@@ -629,8 +632,20 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 20px;
+  margin: 0;
   font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-muted);
+}
+
+.package-card__side {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin: -6px -6px 0 0;
 }
 
 /* ---------------------------------------------------- download control */
@@ -883,6 +898,11 @@ button {
   flex-shrink: 0;
   align-self: center;
   margin: 0 -6px 0 0;
+}
+
+.package-card__action.package-card__side {
+  align-self: flex-start;
+  margin: -6px -6px 0 0;
 }
 
 .my-package__status {
@@ -1441,26 +1461,6 @@ button {
 
 /* ---------------------------------------------------- local package card */
 
-.local-package__side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
-  flex-shrink: 0;
-  color: var(--color-ink);
-}
-
-.local-package__size {
-  font-size: 0.875rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.local-package__side .package-card__action {
-  margin: 0 -6px 0 0;
-}
-
 .local-package__progress progress {
   width: 100%;
   height: 8px;
@@ -1665,6 +1665,19 @@ button {
   display: grid;
   gap: 10px;
   margin-top: 16px;
+}
+
+.package-screen__size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.package-screen__size svg {
+  flex-shrink: 0;
 }
 
 .package-screen__hint {

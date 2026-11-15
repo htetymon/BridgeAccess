@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import type { MyPackage } from '../lib/api/contributions'
 import type { RetryProblem } from '../lib/contribution'
-import { PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
+import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
 import { AlertIcon, EditIcon, CheckIcon, FileTextIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
 
 type Actions = {
@@ -81,6 +81,10 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete,
               </li>
             )}
           </ul>
+        )}
+
+        {pkg.status === 'published' && pkg.sizeBytes > 0 && (
+          <p className="package-card__meta">{formatBytes(pkg.sizeBytes)}</p>
         )}
 
         {pkg.status === 'processing' && (
@@ -172,7 +176,7 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete,
       {!confirming && (
         <button
           type="button"
-          className="icon-button package-card__action"
+          className="icon-button package-card__action package-card__side"
           onClick={() => setConfirming(true)}
           aria-label={`Delete ${title}`}
           disabled={busy !== null}

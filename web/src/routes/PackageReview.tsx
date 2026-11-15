@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import { AlertIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, InfoIcon, XIcon } from '../components/Icons'
 import { db } from '../lib/db'
 import { buildReview, latestAttempt, type OptionState, type ReviewItem } from '../lib/quiz'
@@ -30,6 +30,7 @@ export function Component() {
   const [params] = useSearchParams()
   const attemptId = params.get('attempt')
   const navigate = useNavigate()
+  const location = useLocation()
   const data = useLiveQuery(() => readReview(packageId, attemptId), `${packageId}:${attemptId}`)
   const resultsUrl = `/packages/${packageId}/learn?step=quiz`
 
@@ -39,7 +40,7 @@ export function Component() {
         type="button"
         className="icon-button"
         aria-label="Back to results"
-        onClick={() => navigate(resultsUrl, { replace: true })}
+        onClick={() => (location.key === 'default' ? navigate(resultsUrl, { replace: true }) : navigate(-1))}
       >
         <ChevronLeftIcon />
       </button>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import DownloadControl from './DownloadControl'
 import type { LocalPackage } from '../lib/db'
 import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
 import { BookmarkIcon, CheckIcon, ChevronRightIcon, FileTextIcon, PlayIcon, TrashIcon } from './Icons'
@@ -15,8 +16,8 @@ type Props =
  *
  * - continue: chips, size, a progress bar and a chevron (FR-2.2).
  * - download: chips, a Learnt badge, size and Delete with an inline confirmation (FR-2.3, FR-3.3).
- * - bookmark: chips, Downloaded and Learnt badges, size and Remove bookmark (FR-7.10). No
- *   confirmation: bookmarking again from the package screen undoes it.
+ * - bookmark: chips, Downloaded and Learnt badges, size, Download when needed and Remove
+ *   bookmark (FR-7.10). No confirmation: bookmarking again undoes it.
  */
 export default function LocalPackageCard(props: Props) {
   const { pkg } = props
@@ -63,6 +64,12 @@ export default function LocalPackageCard(props: Props) {
           )}
         </ul>
 
+        <p className="package-card__meta">{formatBytes(pkg.sizeBytes)}</p>
+
+        {props.variant === 'bookmark' && pkg.downloadStatus !== 'downloaded' && (
+          <DownloadControl packageId={pkg.id} title={pkg.title} sizeBytes={pkg.sizeBytes} />
+        )}
+
         {props.variant === 'continue' && (
           <div className="local-package__progress">
             <progress max={100} value={props.percent} aria-label={`${props.percent}% complete`} />
@@ -89,8 +96,7 @@ export default function LocalPackageCard(props: Props) {
         )}
       </div>
 
-      <div className="local-package__side">
-        <span className="local-package__size">{formatBytes(pkg.sizeBytes)}</span>
+      <div className="package-card__side">
         {props.variant === 'continue' ? (
           <ChevronRightIcon size={20} />
         ) : props.variant === 'bookmark' ? (

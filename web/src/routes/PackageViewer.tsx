@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import BlobImage from '../components/BlobImage'
 import QuizStep from '../components/QuizStep'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from '../components/Icons'
@@ -91,6 +91,7 @@ function Viewer({
   latest?: LocalQuizAttempt
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [params, setParams] = useSearchParams()
   const steps = bundle.package.steps
   const requested = params.get('step') as LearningStep | null
@@ -140,7 +141,11 @@ function Viewer({
           type="button"
           className="icon-button"
           aria-label="Back to the package"
-          onClick={() => navigate(`/packages/${packageId}`, { replace: true })}
+          onClick={() =>
+            location.key === 'default'
+              ? navigate(`/packages/${packageId}`, { replace: true })
+              : navigate(-1)
+          }
         >
           <ChevronLeftIcon />
         </button>
