@@ -231,12 +231,15 @@ Full metadata for one published package. Used by the package screen before downl
   },
   "sizeBytes": 850000,
   "imageCount": 2,
+  "coverImageUrl": "/api/v1/packages/0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10/images/8e2b7a64-1c50-4f3d-9d6a-0b7e5c3a2f19",
   "publishedAt": "2026-11-08T10:15:00Z",
   "isAiGenerated": true
 }
 ```
 
-`isAiGenerated` is always `true` and drives the AI label (FR-7.9). Supports `ETag` and `304`.
+`coverImageUrl` is the package's first image (lowest `position`, so the AI diagram when there is one), or `null` for a `text_only` package. The response has no quiz and no summary or key concepts; those come with the bundle.
+
+`isAiGenerated` is always `true` and drives the AI label (FR-7.9). Supports `ETag` and `304` (`Cache-Control: private, no-cache`). Downloaded and Learnt are not here: the client shows them from its own store.
 
 **Errors:** `404 NOT_FOUND` (unknown, unpublished, or deleted).
 

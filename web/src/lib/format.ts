@@ -20,3 +20,11 @@ export const RESOURCE_TYPE_LABEL: Record<ResourceType, string> = {
   text: 'Text',
   video: 'Video',
 }
+
+const DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+/** "Jan 20, 2025", as in the designs, on the learner's own calendar day (device time zone). */
+export function formatDate(iso: string): string {
+  const time = Date.parse(iso)
+  return Number.isNaN(time) ? '' : DATE.format(time)
+}

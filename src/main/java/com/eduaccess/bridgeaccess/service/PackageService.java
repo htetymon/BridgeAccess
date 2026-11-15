@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eduaccess.bridgeaccess.dto.PackageBundle;
+import com.eduaccess.bridgeaccess.dto.PackageDetail;
 import com.eduaccess.bridgeaccess.dto.PackageSummary;
 import com.eduaccess.bridgeaccess.dto.PageResponse;
 import com.eduaccess.bridgeaccess.error.ApiErrorResponse.Detail;
@@ -106,6 +107,20 @@ public class PackageService {
 		List<PackageBundle.Image> images = repository.findImages(packageId);
 		return new PackageBundle(PackageBundle.SCHEMA_VERSION, head.info(), head.content(),
 				new PackageBundle.Quiz(questions), images);
+	}
+
+	/**
+	 * Metadata and Learn-tab text of a published, not deleted package (FR-7.1). Shares the
+	 * bundle's queries, without the quiz.
+	 */
+	@Transactional(readOnly = true)
+	public PackageDetail getDetail(UUID packageId) {
+		BundleHead head = repository.findBundleHead(packageId).orElseThrow(ApiException::notFound);
+		List<PackageBundle.Image> images = repository.findImages(packageId); // ordered by position
+		PackageBundle.Info info = head.info();
+		return new PackageDetail(info.id(), info.title(), head.content().overview(), head.content().keyTakeaways(),
+				info.subject(), info.resourceType(), info.packageType(), info.steps(), info.original(), info.sizeBytes(),
+				images.size(), images.isEmpty() ? null : images.get(0).url(), info.publishedAt(), true);
 	}
 
 	private static String oneOf(String field, String value, Set<String> allowed, List<Detail> errors) {

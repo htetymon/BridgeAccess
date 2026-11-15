@@ -47,6 +47,7 @@ export const router = createBrowserRouter([
       { path: 'contribute/new', lazy: () => import('./routes/CreatePackage') },
       { path: 'contribute/mine', lazy: () => import('./routes/MyContributions') },
       { path: 'packages/:packageId', lazy: () => import('./routes/PackageDetail') },
+      { path: 'packages/:packageId/learn', lazy: () => import('./routes/PackageViewer') },
       { path: '*', lazy: () => import('./routes/NotFound') },
     ],
   },

@@ -83,3 +83,26 @@ export function getBundle(packageId: string, signal?: AbortSignal) {
     signal,
   })
 }
+
+/** GET /packages/{id}: the package screen before download (FR-7.1). */
+export type PackageDetail = {
+  id: string
+  title: string
+  overview: string
+  keyTakeaways: string[]
+  subject: Subject
+  resourceType: ResourceType
+  packageType: PackageType
+  steps: LearningStep[]
+  original: { title: string; author: string; link: string }
+  sizeBytes: number
+  imageCount: number
+  /** First image of the package, or null for a text-only package. */
+  coverImageUrl: string | null
+  publishedAt: string
+  isAiGenerated: boolean
+}
+
+export function getPackage(packageId: string, signal?: AbortSignal) {
+  return apiRequest<PackageDetail>(`/packages/${encodeURIComponent(packageId)}`, { signal })
+}

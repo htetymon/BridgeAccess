@@ -1505,3 +1505,214 @@ button {
   font-size: 0.875rem;
   color: var(--color-muted);
 }
+
+/* -------------------------------------------------------- package screen */
+
+.package-screen__bar {
+  display: flex;
+  align-items: center;
+  margin: -8px 0 8px -8px;
+}
+
+.package-screen__loading {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.package-hero {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.package-hero__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-card);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.package-hero__text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.package-hero__title {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.package-hero__type {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.package-hero .chips {
+  margin-top: 4px;
+}
+
+.chip--subject {
+  background: var(--color-primary-soft);
+  border-color: transparent;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.package-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  margin-top: 20px;
+  border-radius: var(--radius-card);
+  background: var(--color-border);
+}
+
+/* Learn / Details switch: a two-option segmented control. */
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 20px 0 8px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.segmented__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmented__option--active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.package-panel {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.package-panel h2 {
+  margin-top: 8px;
+  font-size: 1.25rem;
+}
+
+.takeaways {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.takeaways li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.takeaways__check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.ai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.ai-note > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.package-screen__action {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.package-screen__hint {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.details-list {
+  margin: 0;
+}
+
+.details-list__row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.details-list__row:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.details-list__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.details-list dt {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.details-list dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.details-list__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-primary);
+}

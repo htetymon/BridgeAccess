@@ -17,3 +17,11 @@ describe('formatBytes', () => {
     expect(formatBytes(bytes)).toBe(expected)
   })
 })
+
+describe('formatDate', () => {
+  it('formats like the designs', async () => {
+    const { formatDate } = await import('./format')
+    expect(formatDate('2025-01-20T12:00:00.000Z')).toBe('Jan 20, 2025')
+    expect(formatDate('not a date')).toBe('')
+  })
+})

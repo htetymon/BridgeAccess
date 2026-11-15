@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.filter.ShallowEtagHeaderFilter;
 
+import com.eduaccess.bridgeaccess.dto.PackageDetail;
 import com.eduaccess.bridgeaccess.dto.PackageManifest;
 import com.eduaccess.bridgeaccess.dto.PackageSummary;
 import com.eduaccess.bridgeaccess.dto.PageResponse;
@@ -63,6 +64,15 @@ public class PackageController {
 			@RequestParam(required = false) Integer limit, @RequestParam(required = false) String cursor) {
 		return packageService.listPublished(deviceId, new PackageService.ListParams(q, subject, resourceType,
 				packageType, sort, excludeMine, limit, cursor));
+	}
+
+	/**
+	 * The package screen before download (FR-7.1). Revalidated each time; an unchanged package
+	 * comes back as a bodiless 304 through the ETag filter.
+	 */
+	@GetMapping("/{packageId}")
+	public ResponseEntity<PackageDetail> detail(@PathVariable UUID packageId) {
+		return ResponseEntity.ok().cacheControl(REVALIDATE).body(packageService.getDetail(packageId));
 	}
 
 	/** Every part to download, with sizes and ETags (FR-4.3, FR-4.4). */

@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -154,6 +155,66 @@ class PackageControllerTest {
 		mvc.perform(get("/api/v1/packages"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("INVALID_DEVICE_ID"));
+	}
+
+	// ---------------------------------------------------------- GET /packages/{id}
+
+	@Test
+	void detailShapeWithCoverImage() throws Exception {
+		UUID id = UUID.randomUUID();
+		UUID diagram = UUID.randomUUID();
+		UUID photo = UUID.randomUUID();
+		PackageBundle.Info info = new PackageBundle.Info(id, "Renewable Energy Basics", "Science", "text",
+				"with_visual", List.of("summary", "key_concepts", "diagram", "quiz"),
+				new PackageBundle.Original("Renewable Energy 101", "Laura Mitchell", "https://example.org/re"),
+				850000, Instant.parse("2026-11-08T10:15:00Z"));
+		PackageBundle.Content content = new PackageBundle.Content("Overview", List.of("a", "b"), "Long summary",
+				List.of(new PackageBundle.KeyConcept("Solar power", "Energy from sunlight")));
+		given(repository.findBundleHead(id)).willReturn(Optional.of(new BundleHead(info, content)));
+		given(repository.findImages(id)).willReturn(List.of(
+				new PackageBundle.Image(diagram, "ai_diagram", 0, "image/webp", 40000, null,
+						"/api/v1/packages/" + id + "/images/" + diagram),
+				new PackageBundle.Image(photo, "contributor", 1, "image/webp", 61240, null,
+						"/api/v1/packages/" + id + "/images/" + photo)));
+
+		mvc.perform(get("/api/v1/packages/" + id).header(DeviceIdFilter.HEADER, DEVICE))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Cache-Control", "no-cache, private"))
+			.andExpect(jsonPath("$.id").value(id.toString()))
+			.andExpect(jsonPath("$.overview").value("Overview"))
+			.andExpect(jsonPath("$.keyTakeaways", hasSize(2)))
+			.andExpect(jsonPath("$.original.link").value("https://example.org/re"))
+			.andExpect(jsonPath("$.imageCount").value(2))
+			.andExpect(jsonPath("$.coverImageUrl").value("/api/v1/packages/" + id + "/images/" + diagram))
+			.andExpect(jsonPath("$.isAiGenerated").value(true))
+			.andExpect(jsonPath("$.summary").doesNotExist())
+			.andExpect(jsonPath("$.quiz").doesNotExist());
+		verify(repository, never()).findQuestions(any());
+	}
+
+	@Test
+	void textOnlyDetailHasNoCover() throws Exception {
+		UUID id = UUID.randomUUID();
+		PackageBundle.Info info = new PackageBundle.Info(id, "T", "Math", "video", "text_only",
+				List.of("summary", "key_concepts", "quiz"), new PackageBundle.Original("O", "A", "https://x.org"), 1,
+				Instant.parse("2026-11-08T10:15:00Z"));
+		given(repository.findBundleHead(id)).willReturn(
+				Optional.of(new BundleHead(info, new PackageBundle.Content("o", List.of(), "s", List.of()))));
+		given(repository.findImages(id)).willReturn(List.of());
+
+		mvc.perform(get("/api/v1/packages/" + id).header(DeviceIdFilter.HEADER, DEVICE))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.imageCount").value(0))
+			.andExpect(jsonPath("$.coverImageUrl").value(org.hamcrest.Matchers.nullValue()));
+	}
+
+	@Test
+	void unknownDetailIsNotFound() throws Exception {
+		UUID id = UUID.randomUUID();
+		given(repository.findBundleHead(id)).willReturn(Optional.empty());
+		mvc.perform(get("/api/v1/packages/" + id).header(DeviceIdFilter.HEADER, DEVICE))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
 	}
 
 	// ---------------------------------------------------- GET /packages/{id}/bundle

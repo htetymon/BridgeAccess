@@ -148,3 +148,41 @@ export const DownloadIcon = (p: IconProps) => (
     <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />
   </Svg>
 )
+
+export const UserIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Svg>
+)
+
+export const LayersIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="m12 3 9 5-9 5-9-5 9-5ZM3 13l9 5 9-5M3 17.5l9 5 9-5" />
+  </Svg>
+)
+
+export const CalendarIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 10h18M8 3v4M16 3v4" />
+  </Svg>
+)
+
+export const StorageIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M3 13h18v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6ZM3 13l3-8h12l3 8M7 17h.01" />
+  </Svg>
+)
+
+export const ExternalLinkIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </Svg>
+)
+
+export const SparkleIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" />
+  </Svg>
+)
