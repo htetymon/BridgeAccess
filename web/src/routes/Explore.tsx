@@ -1,6 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { ChevronDownIcon, SearchIcon, SortIcon, XIcon } from '../components/Icons'
+import { FilterSelect, SearchBox, SortSelect } from '../components/ListControls'
 import PackageCard, { PackageCardSkeleton } from '../components/PackageCard'
 import PageHeader from '../components/PageHeader'
 import { usePackageList } from '../lib/api/usePackageList'
@@ -18,9 +17,6 @@ import {
   writeView,
   type ExploreView,
 } from '../lib/explore'
-
-/** Wait this long after the last key before searching: one request per pause, not per letter. */
-const SEARCH_DELAY_MS = 400
 
 /**
  * Explore and Download Packages (screen 8, FR-4.1, FR-4.2, FR-4.5): the published catalogue
@@ -46,7 +42,13 @@ export function Component() {
       <PageHeader title="Explore and Download Packages" back={{ fallback: '/' }} />
 
       <search className="explore-controls" aria-label="Search and filter packages">
-        <SearchBox value={view.q} onSearch={(q) => change({ q })} />
+        <SearchBox
+          value={view.q}
+          onSearch={(q) => change({ q })}
+          placeholder="Search packages..."
+          maxLength={MAX_QUERY}
+          minLength={MIN_QUERY}
+        />
 
         <div className="filter-row">
           <FilterSelect
@@ -73,18 +75,7 @@ export function Component() {
         </div>
 
         <div className="sort-row">
-          <label className="sort">
-            <SortIcon size={18} />
-            <span>Sort:</span>
-            <select className="sort__select" value="latest_published" onChange={() => {}}>
-              {SORTS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon size={16} />
-          </label>
+          <SortSelect value="latest_published" options={SORTS} onChange={() => {}} />
           {filtersActive && (
             <button
               type="button"
@@ -170,117 +161,5 @@ export function Component() {
               : ''}
       </p>
     </main>
-  )
-}
-
-/**
- * Search field. Typing updates the field at once and searches after a short pause; Enter
- * searches straight away. One letter is not sent (the server needs two), with a hint.
- */
-function SearchBox({ value, onSearch }: { value: string; onSearch: (q: string) => void }) {
-  const [text, setText] = useState(value)
-  const hintId = useId()
-  const latest = useRef(onSearch)
-  useEffect(() => {
-    latest.current = onSearch
-  })
-
-  // Follow the URL when it changes from outside (Back, "Show all packages").
-  const [shown, setShown] = useState(value)
-  if (value !== shown) {
-    setShown(value)
-    if (value.trim() !== text.trim()) setText(value)
-  }
-
-  useEffect(() => {
-    if (text.trim() === value.trim()) return
-    const t = setTimeout(() => latest.current(text), SEARCH_DELAY_MS)
-    return () => clearTimeout(t)
-  }, [text, value])
-
-  const tooShort = text.trim().length > 0 && text.trim().length < MIN_QUERY
-
-  return (
-    <form
-      className="search-box"
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSearch(text)
-        ;(document.activeElement as HTMLElement | null)?.blur() // close the phone keyboard
-      }}
-    >
-      <SearchIcon size={20} />
-      <input
-        type="search"
-        className="search-box__input"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Search packages..."
-        aria-label="Search packages"
-        aria-describedby={tooShort ? hintId : undefined}
-        enterKeyHint="search"
-        maxLength={MAX_QUERY}
-        autoComplete="off"
-      />
-      {text && (
-        <button
-          type="button"
-          className="icon-button icon-button--small search-box__clear"
-          onClick={() => {
-            setText('')
-            onSearch('')
-          }}
-          aria-label="Clear search"
-        >
-          <XIcon size={18} />
-        </button>
-      )}
-      {tooShort && (
-        <p id={hintId} className="search-box__hint">
-          Type at least {MIN_QUERY} characters to search.
-        </p>
-      )}
-    </form>
-  )
-}
-
-/**
- * A filter chip. A native <select> underneath: the phone's own picker, keyboard and screen
- * reader support for free, and nothing extra to download.
- */
-function FilterSelect({
-  label,
-  value,
-  options,
-  allLabel,
-  onChange,
-}: {
-  label: string
-  value: string
-  options: readonly { value: string; label: string }[]
-  allLabel: string
-  onChange: (value: string) => void
-}) {
-  const selected = options.find((o) => o.value === value)
-  return (
-    <label className={`filter-chip${selected ? ' filter-chip--active' : ''}`}>
-      <span className="filter-chip__text" aria-hidden="true">
-        {selected ? selected.label : label}
-      </span>
-      <ChevronDownIcon size={16} />
-      <select
-        className="filter-chip__select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={selected ? `${label}: ${selected.label}` : label}
-      >
-        <option value="">{allLabel}</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

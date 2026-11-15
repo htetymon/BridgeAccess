@@ -12,7 +12,7 @@ import { hasCompletedOnboarding } from './lib/onboarding'
  *
  * The layouts stay in the main bundle: they are tiny and needed on every screen.
  * Tab screens sit under TabLayout, which renders the bottom navigation. Full-screen flows
- * (Explore, Create a Package, package detail) sit outside it, so they have no bottom nav,
+ * (Explore, Create a Package, package detail, the Learn See All lists) sit outside it, so they have no bottom nav,
  * matching the designs.
  *
  * Onboarding (FR-1.1, FR-1.2): Home is the launch screen (manifest start_url), so its loader
@@ -42,6 +42,8 @@ export const router = createBrowserRouter([
       },
       { path: 'welcome', lazy: () => import('./routes/Onboarding') },
       { path: 'explore', lazy: () => import('./routes/Explore') },
+      { path: 'learn/continue', lazy: () => import('./routes/ContinueLearningList') },
+      { path: 'learn/downloads', lazy: () => import('./routes/DownloadsList') },
       { path: 'contribute/new', lazy: () => import('./routes/CreatePackage') },
       { path: 'contribute/mine', lazy: () => import('./routes/MyContributions') },
       { path: 'packages/:packageId', lazy: () => import('./routes/PackageDetail') },

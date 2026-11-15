@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { transport } from './api/client'
 import { createDb, type BridgeAccessDb, type LocalPackage, type LocalProgress } from './db'
 import { resetDeviceIdCacheForTests } from './deviceId'
-import { continueLearning, deleteDownload, progressPercent, recentDownloads } from './localLibrary'
+import {
+  allContinueLearning,
+  allDownloads,
+  continueLearning,
+  deleteDownload,
+  progressPercent,
+  recentDownloads,
+} from './localLibrary'
 
 const original = { ...transport }
 let db: BridgeAccessDb
@@ -95,6 +102,35 @@ describe('recentDownloads', () => {
     expect(items.map((i) => [i.pkg.id, i.learnt])).toEqual([
       ['c', false],
       ['d', true],
+    ])
+  })
+})
+
+describe('full lists', () => {
+  it('allDownloads carries progress for search and sort', async () => {
+    await db.packages.bulkAdd([
+      pkg('a', { ...downloaded('2026-11-10T00:00:00.000Z'), packageType: 'with_visual' }),
+      pkg('b', downloaded('2026-11-11T00:00:00.000Z')),
+      pkg('c', { downloadStatus: 'downloading' }),
+    ])
+    await db.progress.add(
+      progress('a', '2026-11-12T00:00:00.000Z', { completedSteps: ['summary', 'diagram'], learntAt: '2026-11-12T00:00:00.000Z' }),
+    )
+
+    const items = await allDownloads(db)
+    expect(items.map((i) => [i.pkg.id, i.lastOpenedAt, i.learnt, i.percent])).toEqual([
+      ['b', undefined, false, 0],
+      ['a', '2026-11-12T00:00:00.000Z', true, 50],
+    ])
+  })
+
+  it('allContinueLearning has every in-progress download', async () => {
+    await db.packages.bulkAdd([pkg('a', downloaded('2026-11-10T00:00:00.000Z')), pkg('b', downloaded('2026-11-10T00:00:00.000Z'))])
+    await db.progress.bulkAdd([progress('a', '2026-11-11T00:00:00.000Z'), progress('b', '2026-11-12T00:00:00.000Z')])
+
+    expect((await allContinueLearning(db)).map((i) => [i.pkg.id, i.lastOpenedAt])).toEqual([
+      ['b', '2026-11-12T00:00:00.000Z'],
+      ['a', '2026-11-11T00:00:00.000Z'],
     ])
   })
 })

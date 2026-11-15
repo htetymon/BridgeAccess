@@ -2,6 +2,7 @@ import { ApiError, apiRequest } from './api/client'
 import type { LearningStep, PackageType } from './api/packages'
 import { db as appDb, type BridgeAccessDb, type LocalPackage, type LocalProgress } from './db'
 import { cancelDownload } from './downloadManager'
+import type { LibraryItem } from './libraryView'
 import { enqueue } from './outbox'
 
 /**
@@ -63,6 +64,28 @@ export async function recentDownloads(limit: number, store: BridgeAccessDb = app
     .toArray()
   const progress = await store.progress.bulkGet(packages.map((p) => p.id))
   return packages.map((pkg, i) => ({ pkg, learnt: Boolean(progress[i]?.learntAt) }))
+}
+
+/** Every in-progress package, for the Continue Learning full list (search and sort run on top). */
+export async function allContinueLearning(store: BridgeAccessDb = appDb): Promise<LibraryItem[]> {
+  const items = await continueLearning(Number.POSITIVE_INFINITY, store)
+  return items.map(({ pkg, progress, percent }) => ({ pkg, lastOpenedAt: progress.lastOpenedAt, learnt: false, percent }))
+}
+
+/** Every downloaded package with its progress, for Learn and the Recent Downloads full list. */
+export async function allDownloads(store: BridgeAccessDb = appDb): Promise<LibraryItem[]> {
+  const packages = await store.packages
+    .orderBy('downloadedAt')
+    .reverse()
+    .filter((p) => p.downloadStatus === 'downloaded')
+    .toArray()
+  const progress = await store.progress.bulkGet(packages.map((p) => p.id))
+  return packages.map((pkg, i) => ({
+    pkg,
+    lastOpenedAt: progress[i]?.lastOpenedAt,
+    learnt: Boolean(progress[i]?.learntAt),
+    percent: progressPercent(pkg.packageType, progress[i]?.completedSteps ?? []),
+  }))
 }
 
 /**

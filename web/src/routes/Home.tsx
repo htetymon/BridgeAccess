@@ -46,7 +46,7 @@ export function Component() {
         </Link>
       </div>
 
-      <Section title="Continue Learning" seeAllTo="/learn" empty="Packages you start will appear here.">
+      <Section title="Continue Learning" seeAllTo="/learn/continue" empty="Packages you start will appear here.">
         {continuing.status === 'loading' ? (
           <Loading />
         ) : continuing.status === 'ready' && continuing.value.length > 0 ? (
@@ -60,7 +60,7 @@ export function Component() {
         ) : undefined}
       </Section>
 
-      <Section title="Recent Downloads" seeAllTo="/learn" empty="Downloaded packages will appear here.">
+      <Section title="Recent Downloads" seeAllTo="/learn/downloads" empty="Downloaded packages will appear here.">
         {downloads.status === 'loading' ? (
           <Loading />
         ) : downloads.status === 'ready' && downloads.value.length > 0 ? (
