@@ -142,3 +142,9 @@ export const SortIcon = (p: IconProps) => (
     <path d="M7 4v16M3.5 16.5 7 20l3.5-3.5M17 20V4M13.5 7.5 17 4l3.5 3.5" />
   </Svg>
 )
+
+export const DownloadIcon = (p: IconProps) => (
+  <Svg {...p} filled={false}>
+    <path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" />
+  </Svg>
+)

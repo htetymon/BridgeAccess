@@ -633,12 +633,95 @@ button {
   color: var(--color-muted);
 }
 
-.package-card__downloaded {
-  display: inline-flex;
+/* ---------------------------------------------------- download control */
+
+/* Above the stretched title link, so its buttons stay tappable. */
+.download {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.download--done {
   gap: 4px;
   font-weight: 600;
   color: var(--color-accent);
+}
+
+.download--active {
+  flex-wrap: nowrap;
+}
+
+.download__progress {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.download__progress progress {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--color-primary-soft);
+  accent-color: var(--color-primary);
+}
+
+.download__progress progress::-webkit-progress-bar {
+  background: var(--color-primary-soft);
+}
+
+.download__progress progress::-webkit-progress-value {
+  background: var(--color-primary);
+  border-radius: 4px;
+  transition: width 0.2s;
+}
+
+.download__progress progress::-moz-progress-bar {
+  background: var(--color-primary);
+  border-radius: 4px;
+}
+
+.download__label {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.download__cancel {
+  flex-shrink: 0;
+}
+
+.download--confirm {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9375rem;
+}
+
+.download__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.download__error {
+  flex-basis: 100%;
+  color: var(--color-danger);
+}
+
+.download__hint {
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download__progress progress::-webkit-progress-value {
+    transition: none;
+  }
 }
 
 .chips {

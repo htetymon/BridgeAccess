@@ -1,12 +1,15 @@
 import { Link } from 'react-router'
 import type { PackageSummary } from '../lib/api/packages'
 import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
-import { CheckIcon, FileTextIcon, PlayIcon } from './Icons'
+import DownloadControl from './DownloadControl'
+import { FileTextIcon, PlayIcon } from './Icons'
 
 /**
- * Catalogue card (FR-4.2): resource icon, title, subject and package-type chips, size.
- * The title link is stretched over the whole card, so the card is one tap target while
- * leaving room for a separate Download button later (a button inside a link is invalid).
+ * Catalogue card (FR-4.2): resource icon, title, subject and package-type chips, size, and
+ * the download control (FR-4.3, FR-4.6). The title link is stretched over the whole card, so
+ * the card is one tap target; the download control sits above it (a button inside a link is
+ * invalid). "Downloaded" comes from this device's store, not the server's `isDownloaded`:
+ * what matters offline is what is on the phone.
  */
 export default function PackageCard({ pkg }: { pkg: PackageSummary }) {
   const Icon = pkg.resourceType === 'video' ? PlayIcon : FileTextIcon
@@ -29,12 +32,8 @@ export default function PackageCard({ pkg }: { pkg: PackageSummary }) {
         </ul>
         <p className="package-card__meta">
           <span>{formatBytes(pkg.sizeBytes)}</span>
-          {pkg.isDownloaded && (
-            <span className="package-card__downloaded">
-              <CheckIcon size={16} /> Downloaded
-            </span>
-          )}
         </p>
+        <DownloadControl packageId={pkg.id} title={pkg.title} sizeBytes={pkg.sizeBytes} />
       </div>
     </article>
   )
