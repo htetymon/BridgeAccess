@@ -206,11 +206,11 @@ function PackageBody({
           <div className="package-screen__action">
             {view.downloaded || online ? (
               <Link to={`/packages/${view.id}/learn`} className="button button--primary button--block">
-                <BookIcon size={20} /> Start Learning
+                <BookIcon size={20} /> {view.started ? 'Continue Learning' : 'Start Learning'}
               </Link>
             ) : (
               <button type="button" className="button button--primary button--block" disabled>
-                <BookIcon size={20} /> Start Learning
+                <BookIcon size={20} /> {view.started ? 'Continue Learning' : 'Start Learning'}
               </button>
             )}
             {!view.downloaded && (

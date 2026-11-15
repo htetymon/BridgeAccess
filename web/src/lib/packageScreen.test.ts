@@ -85,8 +85,19 @@ describe('package view', () => {
     const view = fromDetail(detail, {
       progress: { packageId: ID, completedSteps: ['quiz'], lastStep: null, lastOpenedAt: '', learntAt: '2026-11-11T00:00:00.000Z' },
     })
-    expect(view).toMatchObject({ downloaded: false, learnt: true, coverUrl: null })
+    expect(view).toMatchObject({ downloaded: false, learnt: true, started: false, coverUrl: null })
     expect(view.downloadedAt).toBeUndefined()
+  })
+
+  it('started: opened and not learnt (the button says Continue Learning)', () => {
+    const at = (p: Partial<{ completedSteps: ('summary' | 'key_concepts')[]; lastStep: 'key_concepts' | null }>) =>
+      fromBundle(bundle, {
+        progress: { packageId: ID, completedSteps: [], lastStep: null, lastOpenedAt: '', learntAt: null, ...p },
+      }).started
+    expect(fromBundle(bundle, {}).started).toBe(false)
+    expect(at({})).toBe(false)
+    expect(at({ lastStep: 'key_concepts' })).toBe(true)
+    expect(at({ completedSteps: ['summary'] })).toBe(true)
   })
 
   it('readLocal gathers the row, bundle, progress and first stored image', async () => {

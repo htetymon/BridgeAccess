@@ -34,6 +34,8 @@ export type PackageView = {
   downloadedAt?: string
   downloaded: boolean
   learnt: boolean
+  /** Opened in the viewer before and not learnt yet: the button says Continue Learning. */
+  started: boolean
   /** Bookmarked on this device (FR-7.10). */
   bookmarked: boolean
   /** The latest quiz attempt on this device (FR-7.6), shown as the quiz result. */
@@ -90,6 +92,7 @@ export function fromBundle(bundle: PackageBundle, local: Local): PackageView {
     downloadedAt: local.pkg?.downloadedAt,
     downloaded: true,
     learnt: Boolean(local.progress?.learntAt),
+    started: hasStarted(local.progress),
     latest: local.latest,
     bookmarked: Boolean(local.pkg?.bookmarkedAt),
     coverUrl: first?.url ?? null,
@@ -112,6 +115,7 @@ export function fromDetail(detail: PackageDetail, local: Local): PackageView {
     publishedAt: detail.publishedAt,
     downloaded: false,
     learnt: Boolean(local.progress?.learntAt),
+    started: hasStarted(local.progress),
     latest: local.latest,
     bookmarked: Boolean(local.pkg?.bookmarkedAt),
     coverUrl: detail.coverImageUrl,
@@ -172,4 +176,10 @@ export function usePackageScreen(packageId: string, store: BridgeAccessDb = appD
     return { status: 'error', message: "You're offline. Download a package to open it without a connection.", retry }
   }
   return { status: 'error', message: e.message, retry }
+}
+
+/** The learner has been into the viewer (a resume point or a completed step) and not finished. */
+function hasStarted(progress: LocalProgress | undefined): boolean {
+  if (!progress || progress.learntAt) return false
+  return progress.lastStep !== null || progress.completedSteps.length > 0
 }

@@ -28,7 +28,9 @@ export default function LocalPackageCard(props: Props) {
       className="local-package"
       resourceType={pkg.resourceType}
       title={pkg.title}
-      to={`/packages/${pkg.id}`}
+      // Continue Learning opens the lesson itself; with no ?step the viewer resumes at the step
+      // the learner was last on (progress.lastStep). The other lists open the package page.
+      to={props.variant === 'continue' ? `/packages/${pkg.id}/learn` : `/packages/${pkg.id}`}
       meta={
         <>
           <PackageMeta subject={pkg.subject} packageType={pkg.packageType} sizeBytes={pkg.sizeBytes} />
