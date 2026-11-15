@@ -163,6 +163,7 @@ export default function QuizStep({
 
 /** Score, percentage, pass or fail and the completion message (FR-7.6). Also used on the package screen. */
 export function QuizResult({ attempt }: { attempt: LocalQuizAttempt }) {
+  const reviewUrl = `/packages/${attempt.packageId}/review?attempt=${attempt.id}`
   const percent = Math.round(attempt.percentage)
   return (
     <section className={`quiz-result quiz-result--${attempt.passed ? 'pass' : 'fail'}`} aria-label="Quiz result">
@@ -185,6 +186,9 @@ export function QuizResult({ attempt }: { attempt: LocalQuizAttempt }) {
         {resultMessage(attempt.passed, attempt.passMarkPercent)}
         {attempt.passed && ' You earned the Learnt badge.'}
       </p>
+      <Link to={reviewUrl} className="button button--secondary button--small quiz-result__review">
+        Review Answers
+      </Link>
     </section>
   )
 }

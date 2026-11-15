@@ -115,3 +115,26 @@ describe('resultMessage', () => {
     expect(resultMessage(false, 60)).toBe('You need 60% to pass. Review the steps and try again.')
   })
 })
+
+describe('buildReview', () => {
+  it('marks the choice and the right answer of every question, in quiz order', async () => {
+    const { buildReview } = await import('./quiz')
+    const graded = gradeQuiz(questions, answers(4)) // the last one is wrong
+    const review = buildReview([...questions].reverse(), graded)
+
+    expect(review.map((r) => r.question.id)).toEqual(['q0', 'q1', 'q2', 'q3', 'q4'])
+    expect(review[0]).toMatchObject({ isCorrect: true, selectedIndex: 0 })
+    expect(review[0].options.map((o) => o.state)).toEqual(['chosen-correct', 'plain', 'plain', 'plain'])
+
+    // q4: correct is 0, chose 1.
+    expect(review[4]).toMatchObject({ isCorrect: false, selectedIndex: 1 })
+    expect(review[4].options.map((o) => o.state)).toEqual(['correct', 'chosen-wrong', 'plain', 'plain'])
+  })
+
+  it('shows a question with no stored answer as not answered', async () => {
+    const { buildReview } = await import('./quiz')
+    const review = buildReview(questions.slice(0, 1), { answers: [] })
+    expect(review[0]).toMatchObject({ selectedIndex: null, isCorrect: false })
+    expect(review[0].options.map((o) => o.state)).toEqual(['correct', 'plain', 'plain', 'plain'])
+  })
+})

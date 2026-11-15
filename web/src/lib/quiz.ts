@@ -132,3 +132,43 @@ export function resultMessage(passed: boolean, passMarkPercent: number): string 
     ? "You've completed this package!"
     : `You need ${passMarkPercent}% to pass. Review the steps and try again.`
 }
+
+export type OptionState = 'chosen-correct' | 'chosen-wrong' | 'correct' | 'plain'
+
+export type ReviewItem = {
+  question: Question
+  /** null when the stored attempt has no answer for it (the quiz changed since: not expected). */
+  selectedIndex: number | null
+  isCorrect: boolean
+  options: { text: string; state: OptionState }[]
+}
+
+/**
+ * Review Answers (FR-7.7): every question of the quiz with the learner's choice, the right
+ * answer and whether it was correct. Correctness is recomputed from the answer key, so it
+ * matches the options shown.
+ */
+export function buildReview(questions: readonly Question[], attempt: Pick<LocalQuizAttempt, 'answers'>): ReviewItem[] {
+  const chosen = new Map(attempt.answers.map((a) => [a.questionId, a.selectedIndex]))
+  return [...questions]
+    .sort((a, b) => a.position - b.position)
+    .map((question) => {
+      const selectedIndex = chosen.get(question.id) ?? null
+      return {
+        question,
+        selectedIndex,
+        isCorrect: selectedIndex === question.correctIndex,
+        options: question.options.map((text, i) => ({
+          text,
+          state:
+            i === selectedIndex
+              ? i === question.correctIndex
+                ? 'chosen-correct'
+                : 'chosen-wrong'
+              : i === question.correctIndex
+                ? 'correct'
+                : 'plain',
+        })),
+      }
+    })
+}

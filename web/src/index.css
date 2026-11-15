@@ -2061,3 +2061,217 @@ button {
   text-align: center;
   color: var(--color-muted);
 }
+
+/* ------------------------------------------------------- review answers */
+
+.review {
+  padding-bottom: calc(96px + var(--safe-bottom));
+}
+
+.review__bar {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  margin: -8px -8px 16px;
+}
+
+.review__bar h1 {
+  font-size: 1.375rem;
+  text-align: center;
+}
+
+.review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  font-weight: 700;
+}
+
+.review-summary--pass {
+  background: var(--color-success-soft);
+}
+
+.review-summary--fail {
+  background: var(--color-danger-soft);
+}
+
+.review-summary__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.125rem;
+}
+
+.review-summary__icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.review-summary--pass .review-summary__icon {
+  background: var(--color-success);
+}
+
+.review-summary--fail .review-summary__icon {
+  background: var(--color-danger);
+}
+
+.review-summary__score {
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-summary__percent {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 1.25rem;
+}
+
+.review-summary--pass .review-summary__percent {
+  color: var(--color-success);
+}
+
+.review-summary--fail .review-summary__percent {
+  color: var(--color-danger);
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-card {
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+
+.review-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.review-card__head::-webkit-details-marker {
+  display: none;
+}
+
+.review-card__count {
+  flex: 1;
+  color: var(--color-primary);
+  font-size: 0.9375rem;
+}
+
+.review-card__head > svg {
+  transition: transform 0.15s;
+}
+
+.review-card[open] .review-card__head > svg {
+  transform: rotate(180deg);
+}
+
+.review-card__question {
+  margin: 8px 0 10px;
+  font-size: 1.125rem;
+  line-height: 1.35;
+}
+
+.review-card__note {
+  margin-bottom: 8px;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.review-options {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  line-height: 1.4;
+}
+
+.review-option__mark {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid var(--color-muted);
+  border-radius: 50%;
+}
+
+.review-option--chosen-correct,
+.review-option--correct {
+  background: var(--color-success-soft);
+}
+
+.review-option--chosen-wrong {
+  background: var(--color-danger-soft);
+}
+
+.review-option--chosen-correct .review-option__mark,
+.review-option--correct .review-option__mark {
+  border-color: var(--color-success);
+}
+
+.review-option--chosen-wrong .review-option__mark {
+  border-color: var(--color-danger);
+}
+
+/* The learner's own choice has a filled dot, like a selected radio. */
+.review-option--chosen-correct .review-option__mark {
+  background: radial-gradient(circle, var(--color-success) 45%, transparent 50%);
+}
+
+.review-option--chosen-wrong .review-option__mark {
+  background: radial-gradient(circle, var(--color-danger) 45%, transparent 50%);
+}
+
+.review-card__explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-primary-soft);
+  font-size: 0.9375rem;
+}
+
+.review-card__explanation > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-primary);
+}
+
+.quiz-result__review {
+  justify-self: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-card__head > svg {
+    transition: none;
+  }
+}
