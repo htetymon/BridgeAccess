@@ -33,12 +33,14 @@ import com.eduaccess.bridgeaccess.repository.CatalogueRepository;
 import com.eduaccess.bridgeaccess.repository.CatalogueRepository.BundleHead;
 import com.eduaccess.bridgeaccess.repository.CatalogueRepository.FeedQuery;
 import com.eduaccess.bridgeaccess.service.FeedCursor;
+import com.eduaccess.bridgeaccess.service.PackageDownloadService;
 import com.eduaccess.bridgeaccess.service.PackageService;
+import com.eduaccess.bridgeaccess.storage.ImageStore;
 
 import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(PackageController.class)
-@Import(PackageService.class)
+@Import({ PackageService.class, PackageDownloadService.class })
 class PackageControllerTest {
 
 	private static final UUID DEVICE = UUID.fromString("11111111-2222-4333-8444-555555555555");
@@ -51,6 +53,9 @@ class PackageControllerTest {
 
 	@MockitoBean
 	CatalogueRepository repository;
+
+	@MockitoBean
+	ImageStore imageStore;
 
 	// ------------------------------------------------------------ GET /packages
 

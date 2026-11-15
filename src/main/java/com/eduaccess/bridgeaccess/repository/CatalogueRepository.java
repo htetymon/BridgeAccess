@@ -149,6 +149,38 @@ public class CatalogueRepository {
 		});
 	}
 
+	/** Where an image's bytes live, for the download manifest and the image endpoint. */
+	public record ImageFile(UUID id, String source, int position, String mimeType, int sizeBytes,
+			String storagePath) {
+	}
+
+	private static final String IMAGE_FILES = """
+			select pi.id, pi.source::text as source, pi.position, pi.mime_type, pi.size_bytes, pi.storage_path
+			  from app.package_images pi
+			  join app.learning_packages lp on lp.id = pi.package_id
+			 where pi.package_id = :packageId and """ + VISIBLE;
+
+	/** Images of a published, not deleted package, in position order. */
+	public List<ImageFile> findImageFiles(UUID packageId) {
+		return jdbc.query(IMAGE_FILES + " order by pi.position", new MapSqlParameterSource("packageId", packageId),
+				(rs, i) -> imageFile(rs));
+	}
+
+	/** One image, only if its package is published and not deleted. */
+	public Optional<ImageFile> findImageFile(UUID packageId, UUID imageId) {
+		return jdbc
+			.query(IMAGE_FILES + " and pi.id = :imageId",
+					new MapSqlParameterSource("packageId", packageId).addValue("imageId", imageId),
+					(rs, i) -> imageFile(rs))
+			.stream()
+			.findFirst();
+	}
+
+	private static ImageFile imageFile(ResultSet rs) throws SQLException {
+		return new ImageFile(rs.getObject("id", UUID.class), rs.getString("source"), rs.getInt("position"),
+				rs.getString("mime_type"), rs.getInt("size_bytes"), rs.getString("storage_path"));
+	}
+
 	/** Learning steps the client renders, per API section 3. */
 	static List<String> stepsFor(String packageType) {
 		return "with_visual".equals(packageType) ? List.of("summary", "key_concepts", "diagram", "quiz")

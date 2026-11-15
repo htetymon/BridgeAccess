@@ -240,6 +240,53 @@ Full metadata for one published package. Used by the package screen before downl
 
 **Errors:** `404 NOT_FOUND` (unknown, unpublished, or deleted).
 
+### GET /packages/{packageId}/manifest
+
+Every part the device must store for the package to count as downloaded (FR-4.4), with its URL, size and `ETag`. The client downloads from this list part by part, shows progress, and skips any part it already holds (FR-4.3). See [flow 11.1](#111-download-a-package).
+
+**200**
+
+```json
+{
+  "packageId": "0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10",
+  "version": "3f9a1c0d7e2b4a6f8c1d2e3f4a5b6c7d",
+  "totalBytes": 64740,
+  "parts": [
+    {
+      "kind": "bundle",
+      "id": "0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10",
+      "url": "/api/v1/packages/0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10/bundle",
+      "mimeType": "application/json",
+      "sizeBytes": 3240,
+      "etag": "\"b-5d2e8f1a9c3b7d4e6f0a1b2c3d4e5f60\""
+    },
+    {
+      "kind": "image",
+      "id": "8e2b7a64-1c50-4f3d-9d6a-0b7e5c3a2f19",
+      "url": "/api/v1/packages/0b9d6a8e-3c1f-4d52-8e75-6a2f1c9b4d10/images/8e2b7a64-1c50-4f3d-9d6a-0b7e5c3a2f19",
+      "mimeType": "image/webp",
+      "sizeBytes": 61500,
+      "etag": "\"i-a1b2c3d4e5f60718293a4b5c6d7e8f90\""
+    }
+  ]
+}
+```
+
+| Field | Notes |
+|---|---|
+| `parts` | The bundle first, then images in `position` order. `text_only` packages have only the bundle. |
+| `kind` | `bundle` or `image`. |
+| `id` | The package ID for the bundle, the image ID for an image. |
+| `url` | Full path including `/api/v1`. Fetch it as given. |
+| `sizeBytes` | Size as stored. The bundle's size is its uncompressed JSON; it is gzipped in transit, so fewer bytes cross the network. |
+| `etag` | Exactly the `ETag` the part's URL returns. A part stored locally with the same `etag` is current and need not be downloaded again. |
+| `totalBytes` | Sum of the parts' `sizeBytes`. Use it for download progress and for `sizeBytes` in `PUT /me/downloads`. |
+| `version` | Changes whenever any part changes. It is also the manifest's own `ETag` (`"m-{version}"`), so an unchanged manifest is answered with `304`. |
+
+`Cache-Control: private, no-cache`: always revalidated, never served stale.
+
+**Errors:** `404 NOT_FOUND` (unknown, unpublished, or deleted).
+
 ### GET /packages/{packageId}/bundle
 
 The complete text payload for offline use. One small JSON file, gzipped, target 30 KB or less. Includes the correct answers and explanations, because grading happens on the device with no connection (FR-7.5).
@@ -301,24 +348,27 @@ The complete text payload for offline use. One small JSON file, gzipped, target 
 
 - `keyConcepts` has 4 to 6 items. `quiz.questions` has exactly 5, ordered by `position`.
 - `images` is empty for `text_only` packages. The AI diagram, when it exists, has `source: "ai_diagram"` and `position: 0`.
-- `sizeBytes` in `package` is the total for bundle plus images, and drives download progress.
-- Supports `ETag` and `304`.
+- `sizeBytes` in `package` is the total for bundle plus images, for display. Download progress uses the manifest's `totalBytes`.
+- Strong `ETag`, identical to the bundle part's `etag` in the manifest. `If-None-Match` with it returns `304`. `Cache-Control: private, no-cache`.
+- No `Range` support: the bundle is small, so an interrupted bundle is fetched again in full.
 
 **Errors:** `404 NOT_FOUND`.
 
 ### GET /packages/{packageId}/images/{imageId}
 
-Binary image (WebP in almost all cases). The Storage bucket is private, so the backend streams the file or redirects to a short-lived signed URL.
+Binary image (WebP in almost all cases). The Storage bucket is private, so the backend streams the file through the API. It does not redirect to a signed URL: a signed URL can expire partway through a slow resumed download, it would need cross-origin setup, and its validators would differ from the ETags in the manifest. Images are about 80 KB, so passing them through costs little.
 
 | Response header | Value |
 |---|---|
 | `Content-Type` | `image/webp`, `image/png`, or `image/jpeg` |
-| `Content-Length` | Size in bytes |
-| `ETag` | Stable per image |
+| `Content-Length` | Size in bytes (of the range, on a `206`) |
+| `ETag` | Strong, identical to the image part's `etag` in the manifest |
 | `Cache-Control` | `private, max-age=31536000, immutable` |
 | `Accept-Ranges` | `bytes` |
 
-Supports `Range` requests (`206 Partial Content`) so an interrupted download resumes without restarting (FR-4.3).
+- **Conditional requests.** The ETag comes from the database, so `If-None-Match` is answered with `304` without reading the file from storage.
+- **Resume.** `Range: bytes={start}-` returns `206 Partial Content` with `Content-Range` and the rest of the file, so an interrupted download continues from where it stopped (FR-4.3). A range starting past the end returns `416`. `If-Range` is not needed: the bytes behind an image URL and ETag never change (a re-encoded image gets a new ETag).
+- **Visibility.** Images of unpublished or deleted packages return `404`, even to devices that downloaded them before.
 
 **Errors:** `404 NOT_FOUND`, `416 RANGE_NOT_SATISFIABLE`.
 
@@ -767,15 +817,21 @@ The request itself returns `400` only if the body is malformed or over 50 operat
 ```
 Explore: tap Download
   1. If sizeBytes > largeDownloadBytes or Data Saver is on: ask the learner to confirm.
-  2. GET /packages/{id}/bundle          (ETag aware)
-  3. GET /packages/{id}/images/{imageId} for each image, with Range to resume
-  4. Store bundle + images in IndexedDB in one transaction.
-     Only now does the package count as downloaded.
-  5. PUT /me/downloads/{id} {status: "completed", sizeBytes}
-     If offline or it fails, queue download.record in the outbox.
+  2. GET /packages/{id}/manifest        -> parts with url, sizeBytes, etag; totalBytes
+  3. Skip every part already stored locally with the same etag.
+  4. GET the bundle (if needed), then each needed image. Store each image as soon as it
+     is complete. An image interrupted midway resumes with Range: bytes={received}-.
+  5. In one IndexedDB transaction: store the bundle, delete local images no longer in the
+     manifest, mark the package downloaded. Only now does it count as downloaded.
+  6. PUT /me/downloads/{id} {status: "completed", sizeBytes: totalBytes}
+     If offline or it fails transiently, queue download.record in the outbox.
 ```
 
-On failure at steps 2 or 3, retry automatically with backoff. Parts already stored are not fetched again.
+- **Retries.** Network errors, timeouts, `408`, `429` and `5xx` are retried with backoff. A connection that delivers no bytes for 20 seconds is aborted and retried. An attempt that received bytes resets the retry count, so a slow but working connection is not given up on.
+- **Interrupted downloads.** Images already stored are kept. Starting the download again fetches only what is missing (step 3). The package is not shown as downloaded until step 5.
+- **Integrity.** Each part's `ETag` is checked against the manifest. If they differ, the package changed mid-download, and the client starts again from a fresh manifest (once). A `206` whose `Content-Range` does not start where the client stopped, or a `200` answering a `Range`, means the part is fetched again from the start.
+- **Updates.** Re-running the flow on a downloaded package fetches only the parts whose `etag` changed. The old copy stays usable until step 5.
+- **Recording.** Step 6 never fails the download. A `404` there means the package was unpublished meanwhile; the local copy stays ([section 12](#12-assumptions-and-open-decisions), #10) and nothing is queued.
 
 ### 11.2 Contribute a package
 

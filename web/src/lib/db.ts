@@ -63,6 +63,8 @@ export type LocalImage = {
   mimeType: string
   sizeBytes: number
   altText: string | null
+  /** ETag the manifest gave for this image; a matching one means the stored file is current. */
+  etag?: string
   /** The file itself. Stored as soon as it arrives, so a retried download skips it (FR-4.3). */
   blob: Blob
 }
