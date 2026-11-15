@@ -18,7 +18,8 @@ export default function Section({ title, seeAllTo, empty, children }: Props) {
         <h2>{title}</h2>
         {seeAllTo && (
           <Link to={seeAllTo} className="section__see-all">
-            See All <ChevronRightIcon size={16} />
+            {/* Screen readers list links out of context; "See all: Recent Downloads" stays unique. */}
+            See all<span className="visually-hidden">: {title}</span> <ChevronRightIcon size={16} />
           </Link>
         )}
       </div>

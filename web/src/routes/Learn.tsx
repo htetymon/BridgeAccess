@@ -3,7 +3,7 @@ import LocalPackageCard from '../components/LocalPackageCard'
 import { PackageCardSkeleton } from '../components/PackageCard'
 import PageHeader from '../components/PageHeader'
 import Section from '../components/Section'
-import { allDownloads, continueLearning, deleteDownload } from '../lib/localLibrary'
+import { allDownloads, continueLearning } from '../lib/localLibrary'
 import { useLiveQuery } from '../lib/useLiveQuery'
 
 /** Items shown per section on the tab; See All opens the full list with search and filters. */
@@ -46,7 +46,7 @@ export function Component() {
             <ul className="package-list" aria-label="Downloaded Packages">
               {downloads.value.slice(0, DOWNLOADS_COUNT).map(({ pkg, learnt }) => (
                 <li key={pkg.id}>
-                  <LocalPackageCard variant="download" pkg={pkg} learnt={learnt} onDelete={deleteDownload} />
+                  <LocalPackageCard variant="download" pkg={pkg} learnt={learnt} />
                 </li>
               ))}
             </ul>

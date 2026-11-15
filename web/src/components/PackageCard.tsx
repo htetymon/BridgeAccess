@@ -1,39 +1,22 @@
-import { Link } from 'react-router'
 import type { PackageSummary } from '../lib/api/packages'
-import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
 import DownloadControl from './DownloadControl'
-import { FileTextIcon, PlayIcon } from './Icons'
+import PackageCardShell, { PackageMeta } from './PackageCardShell'
 
 /**
- * Catalogue card (FR-4.2): resource icon, title, subject and package-type chips, size, and
- * the download control (FR-4.3, FR-4.6). The title link is stretched over the whole card, so
- * the card is one tap target; the download control sits above it (a button inside a link is
- * invalid). "Downloaded" comes from this device's store, not the server's `isDownloaded`:
- * what matters offline is what is on the phone.
+ * Catalogue card (FR-4.2): resource icon, title, subject, package type and size, and the
+ * download control in the footer (FR-4.3, FR-4.6). "Downloaded" comes from this device's
+ * store, not the server's `isDownloaded`: what matters offline is what is on the phone.
  */
 export default function PackageCard({ pkg }: { pkg: PackageSummary }) {
-  const Icon = pkg.resourceType === 'video' ? PlayIcon : FileTextIcon
-
   return (
-    <article className="package-card">
-      <div className={`package-card__icon package-card__icon--${pkg.resourceType}`}>
-        <Icon />
-        <span className="visually-hidden">{RESOURCE_TYPE_LABEL[pkg.resourceType]} resource</span>
-      </div>
-      <div className="package-card__body">
-        <h2 className="package-card__title">
-          <Link to={`/packages/${pkg.id}`} className="package-card__link">
-            {pkg.title}
-          </Link>
-        </h2>
-        <ul className="chips" aria-label="Details">
-          <li className="chip">{pkg.subject}</li>
-          <li className="chip">{PACKAGE_TYPE_LABEL[pkg.packageType]}</li>
-        </ul>
-        <p className="package-card__meta">{formatBytes(pkg.sizeBytes)}</p>
-        <DownloadControl packageId={pkg.id} title={pkg.title} sizeBytes={pkg.sizeBytes} />
-      </div>
-    </article>
+    <PackageCardShell
+      resourceType={pkg.resourceType}
+      title={pkg.title}
+      to={`/packages/${pkg.id}`}
+      headingLevel={2}
+      meta={<PackageMeta subject={pkg.subject} packageType={pkg.packageType} sizeBytes={pkg.sizeBytes} />}
+      footer={<DownloadControl packageId={pkg.id} title={pkg.title} sizeBytes={pkg.sizeBytes} />}
+    />
   )
 }
 
@@ -41,10 +24,15 @@ export default function PackageCard({ pkg }: { pkg: PackageSummary }) {
 export function PackageCardSkeleton() {
   return (
     <div className="package-card package-card--skeleton" aria-hidden="true">
-      <div className="package-card__icon" />
-      <div className="package-card__body">
-        <div className="skeleton-line skeleton-line--title" />
-        <div className="skeleton-line skeleton-line--short" />
+      <div className="package-card__head">
+        <div className="package-card__icon" />
+        <div className="package-card__body">
+          <div className="skeleton-line skeleton-line--title" />
+          <div className="skeleton-line skeleton-line--short" />
+        </div>
+      </div>
+      <div className="package-card__footer">
+        <div className="skeleton-line skeleton-line--button" />
       </div>
     </div>
   )

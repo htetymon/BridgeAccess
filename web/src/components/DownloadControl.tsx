@@ -8,13 +8,16 @@ import {
   startDownload,
   useDownload,
 } from '../lib/downloadManager'
+import { deleteDownload } from '../lib/localLibrary'
 import { useOnline } from '../lib/useOnline'
-import { CheckIcon, DownloadIcon, XIcon } from './Icons'
+import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from './Icons'
 
 type Props = { packageId: string; title: string; sizeBytes: number }
 
 /**
  * Download button, confirmation, progress and result for one package (FR-4.3, FR-4.6).
+ * Once downloaded it shows "Downloaded" with Delete (inline confirmation, FR-3.3), so every
+ * card of a package on this device looks and works the same, whichever list it is in.
  * Sits inside a package card, above its stretched title link, so it stays tappable.
  *
  * A download over 1 MB, or any download while the browser's Data Saver is on, asks first,
@@ -25,6 +28,19 @@ export default function DownloadControl({ packageId, title, sizeBytes }: Props) 
   const state = useDownload(packageId)
   const online = useOnline()
   const [confirming, setConfirming] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function remove() {
+    setDeleting(true)
+    try {
+      await deleteDownload(packageId)
+    } finally {
+      // In a Downloads list the card usually disappears first; elsewhere it shows Download again.
+      setDeleting(false)
+      setConfirmingDelete(false)
+    }
+  }
 
   function begin() {
     dismissFailure(packageId)
@@ -33,10 +49,40 @@ export default function DownloadControl({ packageId, title, sizeBytes }: Props) 
   }
 
   if (state.status === 'downloaded') {
+    if (confirmingDelete) {
+      return (
+        <div className="download download--confirm" role="group" aria-label={`Delete ${title}?`}>
+          <p>Delete this download? Your progress is kept, and you can download it again.</p>
+          <div className="download__actions">
+            <button type="button" className="button button--danger button--small" onClick={remove} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+            <button
+              type="button"
+              className="button button--secondary button--small"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )
+    }
     return (
-      <p className="download download--done">
-        <CheckIcon size={16} /> Downloaded
-      </p>
+      <div className="download download--done">
+        <p className="download__status">
+          <CheckIcon size={16} /> Downloaded
+        </p>
+        <button
+          type="button"
+          className="button button--small download__delete"
+          onClick={() => setConfirmingDelete(true)}
+          aria-label={`Delete ${title} from this device`}
+        >
+          <TrashIcon size={18} /> Delete
+        </button>
+      </div>
     )
   }
 

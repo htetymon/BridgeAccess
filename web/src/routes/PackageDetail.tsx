@@ -97,6 +97,7 @@ function PackageBody({
   onTab: (tab: Tab) => void
 }) {
   const Icon = view.resourceType === 'video' ? PlayIcon : FileTextIcon
+  const online = useOnline()
   const ids = useId()
   const tabId = (t: Tab) => `${ids}-tab-${t}`
   const panelId = (t: Tab) => `${ids}-panel-${t}`
@@ -200,15 +201,22 @@ function PackageBody({
             </span>
           </p>
 
+          {/* Downloaded: Start Learning only. Not downloaded: Start Learning (online, from the
+              server) plus Download, which is what makes it work offline. */}
           <div className="package-screen__action">
-            {view.downloaded ? (
+            {view.downloaded || online ? (
               <Link to={`/packages/${view.id}/learn`} className="button button--primary button--block">
                 <BookIcon size={20} /> Start Learning
               </Link>
             ) : (
+              <button type="button" className="button button--primary button--block" disabled>
+                <BookIcon size={20} /> Start Learning
+              </button>
+            )}
+            {!view.downloaded && (
               <>
-                <p className="package-screen__hint">Download this package to learn it, even offline.</p>
                 <DownloadControl packageId={view.id} title={view.title} sizeBytes={view.sizeBytes} />
+                {!online && <p className="package-screen__hint">Connect to the internet to start learning.</p>}
               </>
             )}
           </div>

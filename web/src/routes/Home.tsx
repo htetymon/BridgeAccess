@@ -4,7 +4,7 @@ import LocalPackageCard from '../components/LocalPackageCard'
 import PackageCard, { PackageCardSkeleton } from '../components/PackageCard'
 import Section from '../components/Section'
 import { useExplorePreview } from '../lib/explorePreview'
-import { continueLearning, deleteDownload, recentDownloads } from '../lib/localLibrary'
+import { continueLearning, recentDownloads } from '../lib/localLibrary'
 import { useLiveQuery } from '../lib/useLiveQuery'
 import { useOnline } from '../lib/useOnline'
 
@@ -33,8 +33,8 @@ export function Component() {
       </div>
 
       <header className="page-header">
-        <h1>Welcome to BridgeAccess.</h1>
-        <p className="page-header__subtitle">What would you like to do today?</p>
+        <h1>What would you like to do today?</h1>
+        <p className="page-header__subtitle">Downloaded lessons work without a connection.</p>
       </header>
 
       <div className="quick-actions">
@@ -67,7 +67,7 @@ export function Component() {
           <ul className="package-list" aria-label="Recent Downloads">
             {downloads.value.map(({ pkg, learnt }) => (
               <li key={pkg.id}>
-                <LocalPackageCard variant="download" pkg={pkg} learnt={learnt} onDelete={deleteDownload} />
+                <LocalPackageCard variant="download" pkg={pkg} learnt={learnt} />
               </li>
             ))}
           </ul>

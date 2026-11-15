@@ -7,6 +7,7 @@ import type { LearningStep, PackageBundle } from '../lib/api/packages'
 import { db, type LocalImage, type LocalProgress, type LocalQuizAttempt } from '../lib/db'
 import { completeStep, openStep, resumeStep } from '../lib/progress'
 import { latestAttempt } from '../lib/quiz'
+import { useRemoteBundle } from '../lib/remoteBundle'
 import { useLiveQuery } from '../lib/useLiveQuery'
 
 const STEP_LABEL: Record<LearningStep, string> = {
@@ -36,8 +37,9 @@ async function readViewer(packageId: string): Promise<ViewerData> {
 }
 
 /**
- * Package viewer (FR-3.4, FR-7.3, FR-7.4): the learning steps of a downloaded package, read
- * from IndexedDB only, so it works offline. Step indicator, N of M progress bar, Previous and
+ * Package viewer (FR-3.4, FR-7.3, FR-7.4): the learning steps of a package. A downloaded one
+ * is read from IndexedDB, so it works offline; one that is not downloaded is read from the
+ * server for this visit (see remoteBundle.ts), so the learner can start before downloading. Step indicator, N of M progress bar, Previous and
  * Next, Mark Complete with a Completed badge. The current step is in the URL (?step=); opening
  * without one resumes where the learner left off. Every step change and completion is saved
  * on the device at once and queued for sync.
@@ -45,37 +47,73 @@ async function readViewer(packageId: string): Promise<ViewerData> {
 export function Component() {
   const { packageId = '' } = useParams()
   const data = useLiveQuery(() => readViewer(packageId), packageId)
+  const onDevice = data.status === 'ready' && data.value.downloaded && data.value.bundle !== undefined
+  // Not on the device: learn it straight from the server (needs a connection).
+  const remote = useRemoteBundle(packageId, data.status === 'ready' && !onDevice)
 
-  if (data.status === 'loading') {
+  if (data.status === 'ready' && onDevice) {
     return (
-      <main className="screen viewer" aria-busy="true">
-        <div className="skeleton-line skeleton-line--title" />
-      </main>
+      <Viewer
+        packageId={packageId}
+        bundle={data.value.bundle!}
+        progress={data.value.progress}
+        images={data.value.images.map(({ id, altText, blob }) => ({ id, altText, blob }))}
+        latest={data.value.latest}
+      />
     )
   }
-  if (data.status === 'error' || !data.value.bundle || !data.value.downloaded) {
+  if (data.status === 'ready' && remote.status === 'ready') {
+    const images = [...remote.bundle.images]
+      .sort((a, b) => a.position - b.position)
+      .map(({ id, altText, url }) => ({ id, altText, url }))
     return (
-      <main className="screen viewer">
+      <Viewer
+        packageId={packageId}
+        bundle={remote.bundle}
+        progress={data.value.progress}
+        images={images}
+        latest={data.value.latest}
+      />
+    )
+  }
+  if (data.status === 'loading' || remote.status === 'loading' || remote.status === 'idle') {
+    return (
+      <main className="screen viewer" aria-busy="true">
         <title>Learning · BridgeAccess</title>
-        <div className="list-error" role="alert">
-          <p>Download this package to learn it, even offline.</p>
-          <Link to={`/packages/${packageId}`} className="button button--primary">
-            Go to the package
-          </Link>
+        <div className="package-screen__loading" role="status" aria-label="Loading the lesson">
+          <div className="skeleton-line skeleton-line--title" />
+          <div className="skeleton-line" />
+          <div className="skeleton-line skeleton-line--short" />
         </div>
       </main>
     )
   }
   return (
-    <Viewer
-      packageId={packageId}
-      bundle={data.value.bundle}
-      progress={data.value.progress}
-      images={data.value.images}
-      latest={data.value.latest}
-    />
+    <main className="screen viewer">
+      <title>Learning · BridgeAccess</title>
+      <div className="list-error" role="alert">
+        <p>
+          {remote.status === 'offline'
+            ? "You're offline. Connect to the internet to learn this package, or download it to learn it anywhere."
+            : remote.status === 'error'
+              ? remote.message
+              : 'Could not open this package.'}
+        </p>
+        {remote.status === 'error' && (
+          <button type="button" className="button button--secondary" onClick={remote.retry}>
+            Try again
+          </button>
+        )}
+        <Link to={`/packages/${packageId}`} className="button button--primary">
+          Go to the package
+        </Link>
+      </div>
+    </main>
   )
 }
+
+/** A diagram image: stored on the device (downloaded) or served by the server (learning online). */
+type ViewerImage = { id: string; altText: string | null; blob?: Blob; url?: string }
 
 function Viewer({
   packageId,
@@ -87,7 +125,7 @@ function Viewer({
   packageId: string
   bundle: PackageBundle
   progress?: LocalProgress
-  images: LocalImage[]
+  images: ViewerImage[]
   latest?: LocalQuizAttempt
 }) {
   const navigate = useNavigate()
@@ -256,7 +294,7 @@ function Viewer({
   )
 }
 
-function StepContent({ step, bundle, images }: { step: LearningStep; bundle: PackageBundle; images: LocalImage[] }) {
+function StepContent({ step, bundle, images }: { step: LearningStep; bundle: PackageBundle; images: ViewerImage[] }) {
   if (step === 'summary') {
     return (
       <div className="step-body">
@@ -286,7 +324,11 @@ function StepContent({ step, bundle, images }: { step: LearningStep; bundle: Pac
         )}
         {images.map((image) => (
           <figure key={image.id} className="diagrams__item">
-            <BlobImage blob={image.blob} alt={image.altText ?? ''} className="diagrams__image" />
+            {image.blob ? (
+              <BlobImage blob={image.blob} alt={image.altText ?? ''} className="diagrams__image" />
+            ) : (
+              <img src={image.url} alt={image.altText ?? ''} className="diagrams__image" decoding="async" />
+            )}
             {image.altText && <figcaption>{image.altText}</figcaption>}
           </figure>
         ))}

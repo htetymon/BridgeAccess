@@ -11,7 +11,6 @@ import {
   type LibrarySort,
   type LibraryView,
 } from '../lib/libraryView'
-import { deleteDownload } from '../lib/localLibrary'
 import { useLiveQuery } from '../lib/useLiveQuery'
 import { FilterSelect, SearchBox, SortSelect } from './ListControls'
 import LocalPackageCard from './LocalPackageCard'
@@ -130,7 +129,7 @@ export default function LibraryListScreen({ variant, title, defaultSort, load, e
                 {variant === 'continue' ? (
                   <LocalPackageCard variant="continue" pkg={item.pkg} percent={item.percent} />
                 ) : (
-                  <LocalPackageCard variant="download" pkg={item.pkg} learnt={item.learnt} onDelete={deleteDownload} />
+                  <LocalPackageCard variant="download" pkg={item.pkg} learnt={item.learnt} />
                 )}
               </li>
             ))}

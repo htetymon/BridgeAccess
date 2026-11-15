@@ -3,6 +3,7 @@ import { AlertIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, InfoIcon, XIcon
 import { db } from '../lib/db'
 import { buildReview, latestAttempt, type OptionState, type ReviewItem } from '../lib/quiz'
 import { useLiveQuery } from '../lib/useLiveQuery'
+import { useRemoteBundle } from '../lib/remoteBundle'
 
 async function readReview(packageId: string, attemptId: string | null) {
   const [stored, attempt] = await Promise.all([
@@ -32,6 +33,10 @@ export function Component() {
   const navigate = useNavigate()
   const location = useLocation()
   const data = useLiveQuery(() => readReview(packageId, attemptId), `${packageId}:${attemptId}`)
+  // Learnt online without downloading: the questions come from the server copy instead.
+  const needRemote = data.status === 'ready' && data.value.attempt !== undefined && !data.value.bundle
+  const remote = useRemoteBundle(packageId, needRemote)
+  const bundle = data.status === 'ready' ? (data.value.bundle ?? (remote.status === 'ready' ? remote.bundle : undefined)) : undefined
   const resultsUrl = `/packages/${packageId}/learn?step=quiz`
 
   const header = (
@@ -48,11 +53,11 @@ export function Component() {
     </div>
   )
 
-  if (data.status === 'loading') {
+  if (data.status === 'loading' || (needRemote && (remote.status === 'loading' || remote.status === 'idle'))) {
     return <main className="screen review" aria-busy="true">{header}</main>
   }
-  if (data.status === 'error' || !data.value.attempt || !data.value.bundle) {
-    const noBundle = data.status === 'ready' && data.value.attempt && !data.value.bundle
+  if (data.status === 'error' || !data.value.attempt || !bundle) {
+    const noBundle = data.status === 'ready' && data.value.attempt && !bundle
     return (
       <main className="screen review">
         <title>Review Answers · BridgeAccess</title>
@@ -60,7 +65,7 @@ export function Component() {
         <div className="list-error" role="alert">
           <p>
             {noBundle
-              ? 'Download this package again to review your answers.'
+              ? 'Connect to the internet, or download this package, to review your answers.'
               : 'There is no quiz result to review yet. Take the quiz first.'}
           </p>
           <Link to={`/packages/${packageId}`} className="button button--primary">
@@ -71,7 +76,7 @@ export function Component() {
     )
   }
 
-  const { attempt, bundle } = data.value
+  const { attempt } = data.value
   const items = buildReview(bundle.quiz.questions, attempt)
   const percent = Math.round(attempt.percentage)
 

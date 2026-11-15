@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-const THEME = '#f6f7fb'
+const THEME = '#f6f6f3'
 
 /**
  * public/sw-sync.js is imported by the service worker under a URL that carries its content

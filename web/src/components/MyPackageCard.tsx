@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import type { MyPackage } from '../lib/api/contributions'
 import type { RetryProblem } from '../lib/contribution'
-import { formatBytes, PACKAGE_TYPE_LABEL, RESOURCE_TYPE_LABEL } from '../lib/format'
-import { AlertIcon, EditIcon, CheckIcon, FileTextIcon, PlayIcon, RefreshIcon, TrashIcon } from './Icons'
+import PackageCardShell, { PackageMeta } from './PackageCardShell'
+import DownloadControl from './DownloadControl'
+import { AlertIcon, EditIcon, CheckIcon, RefreshIcon, TrashIcon } from './Icons'
 
 type Actions = {
   /** Resolves to null on success, or the problem to show. */
@@ -23,7 +24,9 @@ type Props = Actions & {
 /**
  * A package in My Contributions (FR-5.7, FR-5.8). Shows the status the contributor needs:
  * Processing (with the original title, since the AI title is not ready), Failed (with the
- * reason and a Retry button), or the published package with its chips and Learnt badge.
+ * reason and a Retry button), or the published package, which looks and works like any other
+ * package card (details, Learnt badge, Download or Downloaded + Delete). The corner trash deletes
+ * the package itself, for everyone; the footer Delete only removes this device's copy.
  * Only a published package links to its page; the others have nothing to open yet.
  */
 export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete, onCheckAgain }: Props) {
@@ -31,7 +34,6 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete,
   const [busy, setBusy] = useState<'retry' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retryProblem, setRetryProblem] = useState<RetryProblem | null>(null)
-  const Icon = pkg.resourceType === 'video' ? PlayIcon : FileTextIcon
   const title = pkg.title ?? pkg.originalTitle
   // Once the server said Retry cannot help, offer the way forward instead of a dead button.
   const retryBlocked = retryProblem !== null && !retryProblem.canRetry
@@ -53,138 +55,137 @@ export default function MyPackageCard({ pkg, stalled = false, onRetry, onDelete,
     if (message) setError(message)
   }
 
-  return (
-    <article className={`package-card my-package my-package--${pkg.status}`} aria-busy={busy !== null}>
-      <div className={`package-card__icon package-card__icon--${pkg.resourceType}`}>
-        <Icon />
-        <span className="visually-hidden">{RESOURCE_TYPE_LABEL[pkg.resourceType]} resource</span>
-      </div>
+  const badges = [
+    pkg.status === 'processing' && (
+      <span key="processing" className="badge badge--progress">
+        {!stalled && <span className="spinner spinner--tiny" aria-hidden="true" />} Processing
+      </span>
+    ),
+    pkg.status === 'failed' && (
+      <span key="failed" className="badge badge--danger">
+        <AlertIcon size={14} /> Failed
+      </span>
+    ),
+    pkg.status === 'published' && pkg.isLearnt && (
+      <span key="learnt" className="badge badge--success">
+        <CheckIcon size={14} /> Learnt
+      </span>
+    ),
+  ]
 
-      <div className="package-card__body">
-        <h3 className="package-card__title">
-          {pkg.status === 'published' ? (
-            <Link to={`/packages/${pkg.id}`} className="package-card__link">
-              {title}
+  const message = error ?? retryProblem?.message
+  let footer: React.ReactNode = null
+  if (confirming) {
+    footer = (
+      <div className="card-confirm" role="group" aria-label={`Delete ${title}?`}>
+        <p>Delete this package? It will be removed for everyone. Devices that downloaded it keep their copy.</p>
+        <div className="card-actions">
+          <button type="button" className="button button--danger button--small" onClick={remove} disabled={busy !== null}>
+            {busy === 'delete' ? 'Deleting…' : 'Delete'}
+          </button>
+          <button
+            type="button"
+            className="button button--secondary button--small"
+            onClick={() => setConfirming(false)}
+            disabled={busy !== null}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  } else if (pkg.status === 'processing') {
+    footer = (
+      <div className="card-status">
+        <p className="card-status__text">
+          {stalled ? 'Still working, check back later.' : 'Building your lesson. This usually takes a minute.'}
+        </p>
+        {stalled && (
+          <div className="card-actions">
+            <button type="button" className="button button--secondary button--small" onClick={() => onCheckAgain(pkg.id)}>
+              <RefreshIcon size={18} /> Check again
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  } else if (pkg.status === 'failed') {
+    footer = (
+      <div className="card-status">
+        {pkg.failureReason && <p className="card-status__text">{pkg.failureReason}</p>}
+        {retryBlocked ? (
+          <div className="card-actions">
+            {retryProblem.existingPackageId && (
+              <Link to={`/packages/${retryProblem.existingPackageId}`} className="button button--secondary button--small">
+                Open that package
+              </Link>
+            )}
+            <Link to="/contribute/new" className="button button--secondary button--small">
+              Create it again
             </Link>
-          ) : (
-            title
-          )}
-        </h3>
-
-        {pkg.status === 'published' && (
-          <ul className="chips" aria-label="Details">
-            {pkg.subject && <li className="chip">{pkg.subject}</li>}
-            <li className="chip">{PACKAGE_TYPE_LABEL[pkg.packageType]}</li>
-            {pkg.isLearnt && (
-              <li className="chip chip--success">
-                <CheckIcon size={14} /> Learnt
-              </li>
-            )}
-          </ul>
-        )}
-
-        {pkg.status === 'published' && pkg.sizeBytes > 0 && (
-          <p className="package-card__meta">{formatBytes(pkg.sizeBytes)}</p>
-        )}
-
-        {pkg.status === 'processing' && (
-          <div className="my-package__processing">
-            <p className="my-package__status">
-              <span className="chip chip--progress">
-                {!stalled && <span className="spinner spinner--tiny" aria-hidden="true" />} Processing
-              </span>
-              <span className="my-package__hint">
-                {stalled ? 'Still working, check back later.' : 'Building your lesson. This usually takes a minute.'}
-              </span>
-            </p>
-            {stalled && (
-              <button type="button" className="button button--secondary button--small" onClick={() => onCheckAgain(pkg.id)}>
-                <RefreshIcon size={18} /> Check again
-              </button>
-            )}
           </div>
-        )}
-
-        {pkg.status === 'failed' && (
-          <div className="my-package__failed">
-            <p className="my-package__status">
-              <span className="chip chip--danger">
-                <AlertIcon size={14} /> Failed
-              </span>
-            </p>
-            {pkg.failureReason && <p className="my-package__reason">{pkg.failureReason}</p>}
-            {retryBlocked ? (
-              <div className="my-package__next">
-                {retryProblem.existingPackageId && (
-                  <Link to={`/packages/${retryProblem.existingPackageId}`} className="button button--secondary button--small">
-                    Open that package
-                  </Link>
-                )}
-                <Link to="/contribute/new" className="button button--secondary button--small">
-                  Create it again
-                </Link>
-              </div>
-            ) : (
-              <div className="my-package__next">
-                {/* Fix the cause first: paste the content, correct the link (FR-5.8). */}
-                <Link
-                  to={`/contribute/edit/${pkg.id}`}
-                  className="button button--secondary button--small"
-                  aria-disabled={busy !== null}
-                >
-                  <EditIcon size={18} /> Edit and retry
-                </Link>
-                <button
-                  type="button"
-                  className="button button--secondary button--small"
-                  onClick={retry}
-                  disabled={busy !== null}
-                >
-                  <RefreshIcon size={18} /> {busy === 'retry' ? 'Retrying…' : 'Retry'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(error ?? retryProblem?.message) && (
-          <p className="my-package__error" role="alert">
-            {error ?? retryProblem?.message}
-          </p>
-        )}
-
-        {confirming && (
-          <div className="my-package__confirm" role="group" aria-label={`Delete ${title}?`}>
-            <p>Delete this package? It will be removed for everyone. Devices that downloaded it keep their copy.</p>
-            <div className="my-package__confirm-actions">
-              <button type="button" className="button button--danger button--small" onClick={remove} disabled={busy !== null}>
-                {busy === 'delete' ? 'Deleting…' : 'Delete'}
-              </button>
-              <button
-                type="button"
-                className="button button--secondary button--small"
-                onClick={() => setConfirming(false)}
-                disabled={busy !== null}
-              >
-                Cancel
-              </button>
-            </div>
+        ) : (
+          <div className="card-actions">
+            {/* Fix the cause first: paste the content, correct the link (FR-5.8). */}
+            <Link
+              to={`/contribute/edit/${pkg.id}`}
+              className="button button--secondary button--small"
+              aria-disabled={busy !== null}
+            >
+              <EditIcon size={18} /> Edit and retry
+            </Link>
+            <button type="button" className="button button--secondary button--small" onClick={retry} disabled={busy !== null}>
+              <RefreshIcon size={18} /> {busy === 'retry' ? 'Retrying…' : 'Retry'}
+            </button>
           </div>
         )}
       </div>
+    )
+  } else if (pkg.status === 'published') {
+    // Published: the same footer as every other package card (Download, or Downloaded + Delete).
+    footer = <DownloadControl packageId={pkg.id} title={title} sizeBytes={pkg.sizeBytes} />
+  }
 
-      {!confirming && (
-        <button
-          type="button"
-          className="icon-button package-card__action package-card__side"
-          onClick={() => setConfirming(true)}
-          aria-label={`Delete ${title}`}
-          disabled={busy !== null}
-        >
-          <TrashIcon />
-        </button>
-      )}
-    </article>
+  return (
+    <PackageCardShell
+      className={`my-package my-package--${pkg.status}`}
+      resourceType={pkg.resourceType}
+      title={title}
+      to={pkg.status === 'published' ? `/packages/${pkg.id}` : undefined}
+      meta={
+        pkg.status === 'published' && (
+          <PackageMeta subject={pkg.subject} packageType={pkg.packageType} sizeBytes={pkg.sizeBytes} />
+        )
+      }
+      badges={badges}
+      corner={
+        !confirming && (
+          <button
+            type="button"
+            className="icon-button package-card__action"
+            onClick={() => setConfirming(true)}
+            aria-label={`Delete ${title} for everyone`}
+            title="Delete for everyone"
+            disabled={busy !== null}
+          >
+            <TrashIcon />
+          </button>
+        )
+      }
+      footer={
+        (footer || message) && (
+          <>
+            {footer}
+            {message && (
+              <p className="card-error" role="alert">
+                {message}
+              </p>
+            )}
+          </>
+        )
+      }
+      busy={busy !== null}
+    />
   )
 }
 
