@@ -85,8 +85,11 @@ Every non-2xx response has this shape:
 
 | Scope | Limit (proposed) | Failure |
 |---|---|---|
-| All endpoints, per device and IP | 120 requests per minute | `429 RATE_LIMITED` with `Retry-After` |
+| All endpoints, per device (`X-Device-Id`) | 120 requests per minute | `429 RATE_LIMITED` with `Retry-After` (seconds) |
+| All endpoints, per IP address | 1,200 requests per minute (many devices can share one address: a school network, a mobile carrier) | `429 RATE_LIMITED` with `Retry-After` |
 | `POST /packages`, per device | 5 per day (server-configurable, FR-5.10) | `429 DAILY_LIMIT_REACHED` |
+
+The per-minute limits are token buckets: a short burst (opening the app, a sync) is fine, a sustained flood is not. All limits are server-configurable (`RATE_LIMIT_PER_DEVICE`, `RATE_LIMIT_PER_IP`).
 
 ---
 

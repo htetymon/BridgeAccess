@@ -83,6 +83,15 @@ public class SyncService {
 		for (SyncRequest.Op op : ops) {
 			results.add(apply(deviceId, op));
 		}
+		// The reliability metric "share of sync operations that succeed" (PRD section 12) comes
+		// from these lines: the outcome is not stored anywhere else.
+		long rejected = results.stream().filter(r -> "rejected".equals(r.status())).count();
+		log.atInfo()
+			.addKeyValue("event", "sync")
+			.addKeyValue("sync.ops", results.size())
+			.addKeyValue("sync.ok", results.size() - rejected)
+			.addKeyValue("sync.rejected", rejected)
+			.log("Sync applied {} operations ({} rejected)", results.size(), rejected);
 		return new SyncResponse(List.copyOf(results));
 	}
 

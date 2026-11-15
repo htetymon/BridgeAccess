@@ -82,6 +82,8 @@ public abstract class PostgresIntegrationTest {
 		registry.add("bridgeaccess.storage.local-dir", IMAGES::toString);
 		// Any key: the client is replaced below, this only keeps "not configured" checks quiet.
 		registry.add("bridgeaccess.gemini.api-key", () -> "test-key");
+		// The tests poll job status every 100 ms from one device; RateLimitFilterTest covers limits.
+		registry.add("bridgeaccess.rate-limit.enabled", () -> "false");
 	}
 
 	@Autowired
