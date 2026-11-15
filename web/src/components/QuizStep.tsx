@@ -65,7 +65,7 @@ export default function QuizStep({
           >
             <RefreshIcon size={18} /> Retake quiz
           </button>
-          <Link to={`/packages/${packageId}`} replace className="button button--primary">
+          <Link to="/" replace className="button button--primary">
             Done
           </Link>
         </div>

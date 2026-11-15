@@ -107,7 +107,7 @@ export function Component() {
         <Link to={resultsUrl} replace className="button button--secondary">
           Back to Results
         </Link>
-        <Link to={`/packages/${packageId}`} replace className="button button--primary">
+        <Link to="/" replace className="button button--primary">
           Done
         </Link>
       </div>
