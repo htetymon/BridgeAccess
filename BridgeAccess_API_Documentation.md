@@ -394,11 +394,11 @@ Create or update this device's download record. Idempotent.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `status` | `started` / `completed` / `failed` | Yes | `completed` is sticky: a later `started` for the same package does not downgrade it unless the download was removed first. |
+| `status` | `started` / `completed` / `failed` | Yes | `completed` is sticky: while the download is active, a later `started` or `failed` (a late event, or a re-download that failed) leaves the record unchanged. After a removal, any status is stored. |
 | `sizeBytes` | integer, 0 or more | Yes | Actual stored size. |
-| `downloadedAt` | timestamp | No | Client time, may be offline. Defaults to server time. |
+| `downloadedAt` | timestamp | No | Client time, may be offline. Defaults to server time. A time in the future is stored as the server's current time. |
 
-Re-downloading a previously removed package clears `removedAt`.
+Any record clears `removedAt`: the package is on the device again. Sending the same record again changes nothing (one row per device and package).
 
 **200**
 
@@ -451,6 +451,8 @@ Merge learning progress. Idempotent and monotonic (FR-8.3):
 - `completedSteps` is **unioned** with what is stored. A step never becomes uncompleted.
 - `lastStep` and `lastOpenedAt` move forward only. A stale event (older `lastOpenedAt`) cannot rewind the resume point.
 - The client cannot set Learnt. Learnt is granted only by a passing quiz attempt.
+- Every field is optional. Missing `completedSteps` adds nothing, a missing `lastStep` keeps the stored resume point, and a missing `lastOpenedAt` means now. A `lastOpenedAt` in the future is stored as the server's current time, so a device with a fast clock cannot pin the resume point.
+- A package deleted after it was published still accepts progress, because devices keep their copy ([section 12](#12-assumptions-and-open-decisions), #10).
 
 **Request**
 
@@ -475,7 +477,7 @@ Merge learning progress. Idempotent and monotonic (FR-8.3):
 }
 ```
 
-**Errors:** `400 VALIDATION_FAILED` (a step outside the four allowed values), `404 NOT_FOUND`.
+**Errors:** `400 VALIDATION_FAILED` (a step outside the four allowed values), `404 NOT_FOUND` (unknown package, or one that was never published).
 
 #### GET /me/progress
 
@@ -513,9 +515,10 @@ The server does not trust the client's score. It grades each answer against `cor
 | `id` | UUID, required. |
 | `answers` | Exactly one answer per question of the package. For the MVP that is 5 (all questions must be answered, FR-7.5). |
 | `selectedIndex` | 0 to 3. |
-| `passMarkPercent` | 0 to 100. Use the value from `GET /config` so an offline result matches what the learner saw. |
+| `passMarkPercent` | 0 to 100, default 60. Use the value from `GET /config` so an offline result matches what the learner saw. The attempt passes when `score / totalQuestions` is at least this mark. |
+| `attemptedAt` | Optional, defaults to now. A time in the future is stored as the server's current time. |
 
-**201 Created** (first time) or **200 OK** (same `id` replayed, returns the stored result)
+**201 Created** (first time) or **200 OK** (same `id` replayed by the same device: returns the stored result unchanged, even if the new body differs, and writes nothing). Two identical requests racing each other also produce one attempt. A package deleted after it was published still accepts attempts.
 
 ```json
 {
@@ -544,7 +547,7 @@ Query: `packageId` (optional), `limit`, `cursor`. Newest first. Items have the s
 
 #### PUT /me/bookmarks/{packageId}
 
-Add a bookmark. Idempotent. **204** (no body). `404 NOT_FOUND` if the package is not published.
+Add a bookmark. Idempotent. **204** (no body). `404 NOT_FOUND` if the package is not published or was deleted, unless this device already bookmarked it (then a replay is still `204`).
 
 #### DELETE /me/bookmarks/{packageId}
 
